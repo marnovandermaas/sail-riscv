@@ -6,6 +6,15 @@
 /*  SPDX-License-Identifier: BSD-2-Clause                                                */
 /*=======================================================================================*/
 
+function try_execute (x : ast) -> Retired = {
+  try {
+    execute(x)
+  } catch {
+    Error_not_rv32e_register() => { handle_illegal(); RETIRE_FAIL },
+    e => throw e /* Rethrow other execptions */
+  }
+}
+
 /* The emulator fetch-execute-interrupt dispatch loop. */
 
 /* returns whether to increment the step count in the trace */
@@ -56,7 +65,7 @@ function step(step_no : int) -> bool = {
             /* check for RVC once here instead of every RVC execute clause. */
             if haveRVC() then {
               nextPC = PC + 2;
-              (execute(ast), true)
+              (try_execute(ast), true)
              } else {
               handle_illegal();
               (RETIRE_FAIL, true)
@@ -70,7 +79,7 @@ function step(step_no : int) -> bool = {
               print_instr("[" ^ dec_str(step_no) ^ "] [" ^ to_str(cur_privilege) ^ "]: " ^ BitStr(PC) ^ " (" ^ BitStr(w) ^ ") " ^ to_str(ast));
             };
             nextPC = PC + 4;
-            (execute(ast), true)
+            (try_execute(ast), true)
           }
         }
       }

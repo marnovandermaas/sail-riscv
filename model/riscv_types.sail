@@ -72,8 +72,16 @@ function arch_to_bits(a : Architecture) -> arch_xlen =
 /* model-internal exceptions */
 
 union exception = {
-  Error_not_implemented : string,
-  Error_internal_error  : unit
+  /*
+   * This is not the proper way to do this, but it is surely the simplest: we
+   * we allow instructions to object to their operands rather than patching the
+   * encdec mapping to do the right thing.  (That would be extensive, because
+   * the `ast` type does not have an encapsulated notion of a register selector
+   * distinct from the underlying bit slice of the instruction.)
+   */
+  Error_not_rv32e_register : unit,
+  Error_not_implemented    : string,
+  Error_internal_error     : unit
 }
 
 val not_implemented : forall ('a : Type). string -> 'a
