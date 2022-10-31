@@ -479,12 +479,13 @@ function init_sys() -> unit = {
   mhartid     = zero_extend(0b0);
 
   misa[MXL] = arch_to_bits(if sizeof(xlen) == 32 then RV32 else RV64);
-  misa[A]   = 0b1;                             /* atomics */
+  misa[A]   = 0b0;                             /* atomics */
   misa[C]   = bool_to_bits(sys_enable_rvc());  /* RVC */
-  misa[I]   = 0b1;                             /* base integer ISA */
+  misa[I]   = 0b0;                             /* base integer ISA */
+  misa[E]   = 0b1;
   misa[M]   = 0b1;                             /* integer multiply/divide */
-  misa[U]   = 0b1;                             /* user-mode */
-  misa[S]   = 0b1;                             /* supervisor-mode */
+  misa[U]   = 0b0;                             /* user-mode */
+  misa[S]   = 0b0;                             /* supervisor-mode */
   misa[V]   = bool_to_bits(sys_enable_vext()); /* vector extension */
 
   if   sys_enable_fdext() & sys_enable_zfinx()
