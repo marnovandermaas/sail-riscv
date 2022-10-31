@@ -268,10 +268,14 @@ function dispatchInterrupt(priv : Privilege) -> option((InterruptType, Privilege
    */
   if not(haveUsrMode()) | (not(haveSupMode()) & not(haveNExt())) then {
     assert(priv == Machine, "invalid current privilege");
-    let enabled_pending = mip.bits & mie.bits;
-    match findPendingInterrupt(enabled_pending) {
-      Some(i) => let r = (i, Machine) in Some(r),
-      None()  => None()
+    if mstatus[MIE] == 0b1 then {
+      let enabled_pending = mip.bits & mie.bits;
+      match findPendingInterrupt(enabled_pending) {
+        Some(i) => let r = (i, Machine) in Some(r),
+        None()  => None()
+      }
+    } else {
+      None()
     }
   } else {
     match getPendingSet(priv) {
