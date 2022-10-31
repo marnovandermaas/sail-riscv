@@ -58,6 +58,10 @@ val plat_rom_size   = {ocaml: "Platform.rom_size", interpreter: "Platform.rom_si
 val plat_clint_base = {ocaml: "Platform.clint_base", interpreter: "Platform.clint_base", c: "plat_clint_base", lem: "plat_clint_base"} : unit -> xlenbits
 val plat_clint_size = {ocaml: "Platform.clint_size", interpreter: "Platform.clint_size", c: "plat_clint_size", lem: "plat_clint_size"} : unit -> xlenbits
 
+/* Location of UART, which should match with the spec in the DTB */
+val plat_uart_base = {ocaml: "Platform.uart_base", interpreter: "Platform.uart_base", c: "plat_uart_base", lem: "plat_uart_base"} : unit -> xlenbits
+val plat_uart_size = {ocaml: "Platform.uart_size", interpreter: "Platform.uart_size", c: "plat_uart_size", lem: "plat_uart_size"} : unit -> xlenbits
+
 /* Location of HTIF ports */
 val plat_htif_tohost = {ocaml: "Platform.htif_tohost", c: "plat_htif_tohost", lem: "plat_htif_tohost"} : unit -> xlenbits
 function plat_htif_tohost () = to_bits(sizeof(xlen), elf_tohost ())
@@ -116,6 +120,18 @@ function within_htif_writable forall 'n, 0 < 'n <= max_mem_access . (addr : xlen
 
 function within_htif_readable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : atom('n)) -> bool =
     plat_htif_tohost() == addr | (plat_htif_tohost() + 4 == addr & width == 4)
+
+function within_uart forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : atom('n)) -> bool = {
+  /* To avoid overflow issues when physical memory extends to the end
+   * of the addressable range, we need to perform address bound checks
+   * on unsigned unbounded integers.
+   */
+  let addr_int      = unsigned(addr);
+  let uart_base_int = unsigned(plat_uart_base());
+  let uart_size_int = unsigned(plat_uart_size());
+    uart_base_int <= addr_int
+  & (addr_int + sizeof('n)) <= (uart_base_int + uart_size_int)
+}
 
 /* CLINT (Core Local Interruptor), based on Spike. */
 
@@ -386,20 +402,77 @@ function htif_tick() = {
 /* Top-level MMIO dispatch */
 $ifndef RVFI_DII
 function within_mmio_readable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : atom('n)) -> bool =
-  within_clint(addr, width) | (within_htif_readable(addr, width) & 1 <= 'n)
+  within_uart (addr, width) | within_clint(addr, width) | (within_htif_readable(addr, width) & 1 <= 'n)
 $else
 function within_mmio_readable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : atom('n)) -> bool = false
 $endif
 
 $ifndef RVFI_DII
 function within_mmio_writable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : atom('n)) -> bool =
-  within_clint(addr, width) | (within_htif_writable(addr, width) & 'n <= 8)
+  within_uart (addr, width) | within_clint(addr, width) | (within_htif_writable(addr, width) & 'n <= 8)
 $else
 function within_mmio_writable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : atom('n)) -> bool = false
 $endif
 
+/* This is a very minimal UART implementation: just enough to allow a basic
+driver to output to the console. It ignores the configuration registers and
+does not supporting reading except from the line status register which indictes
+it is always ready to transmit. Does not support interrupts. */
+
+let UART_OFFSET_DATA    = 0x00000000
+let UART_OFFSET_LINE_CTL = 0x0000000c
+let UART_OFFSET_LINE_STATUS = 0x00000014
+/* Divisor latch access bit. We need this so that we can ignore writes to data
+  register while the driver programs the baud rate (otherwise we might print
+  garbage on console). */
+register UART_DLAB : bit = bitzero
+
+val uart_load : forall 'n, 'n > 0. (AccessType(ext_access_type), xlenbits, int('n)) -> MemoryOpResult(bits(8 * 'n))
+function uart_load(t, addr, width) = {
+  let offset = addr - plat_uart_base();
+  /* We only support reading the status register, which always indicates ready to write output */
+  if offset == zero_extend(UART_OFFSET_LINE_STATUS) & ('n == 4)
+  then {
+    let result = 0b100000; /* TXBufEmpty always */
+    if   get_config_print_platform()
+    then print_platform("uart[" ^ BitStr(offset) ^ "] -> " ^ BitStr(result));
+    MemValue(sail_zero_extend(result, sizeof(8 * 'n)))
+  } else {
+    if   get_config_print_platform()
+    then print_platform("uart[" ^ BitStr(offset) ^ "] -> <not-mapped>");
+    match t {
+      Execute()  => MemException(E_Fetch_Access_Fault()),
+      Read(Data) => MemException(E_Load_Access_Fault()),
+      _          => MemException(E_SAMO_Access_Fault())
+    }
+  }
+}
+
+val uart_store: forall 'n, 'n > 0. (xlenbits, int('n), bits(8 * 'n)) -> MemoryOpResult(bool)
+function uart_store(addr, width, data) = {
+  let offset = addr - plat_uart_base();
+  /* only support writing to the data register for output, ignore other writes */
+  if offset == zero_extend(UART_OFFSET_DATA) & ('n == 8 | 'n == 4) then {
+    if   get_config_print_platform()
+    then print_platform("uart[" ^ BitStr(offset) ^ "] <- " ^ BitStr(data));
+    if UART_DLAB == bitzero then plat_term_write(data[7..0]);
+    MemValue(true)
+  } else if offset == zero_extend(UART_OFFSET_LINE_CTL) & ('n == 8 | 'n == 4) then {
+    if   get_config_print_platform()
+    then print_platform("uart[" ^ BitStr(offset) ^ "] <- " ^ BitStr(data));
+    UART_DLAB = data[7];
+    MemValue(true)
+  } else {
+    if   get_config_print_platform()
+    then print_platform("uart[" ^ BitStr(offset) ^ "] <- " ^ BitStr(data) ^ " (<ignored>)");
+    MemValue(true)
+  }
+}
+
 function mmio_read forall 'n, 0 < 'n <= max_mem_access . (t : AccessType(ext_access_type), paddr : xlenbits, width : atom('n)) -> MemoryOpResult(bits(8 * 'n)) =
-  if   within_clint(paddr, width)
+  if   within_uart(paddr, width)
+  then uart_load(t, paddr, width)
+  else if within_clint(paddr, width)
   then clint_load(t, paddr, width)
   else if within_htif_readable(paddr, width) & (1 <= 'n)
   then htif_load(t, paddr, width)
@@ -410,7 +483,9 @@ function mmio_read forall 'n, 0 < 'n <= max_mem_access . (t : AccessType(ext_acc
   }
 
 function mmio_write forall 'n, 0 <'n <= max_mem_access . (paddr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> MemoryOpResult(bool) =
-  if   within_clint(paddr, width)
+  if   within_uart(paddr, width)
+  then uart_store(paddr, width, data)
+  else if within_clint(paddr, width)
   then clint_store(paddr, width, data)
   else if within_htif_writable(paddr, width) & 'n <= 8
   then htif_store(paddr, width, data)
