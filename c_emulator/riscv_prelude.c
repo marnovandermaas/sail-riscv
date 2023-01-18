@@ -55,3 +55,8 @@ bool get_config_print_platform(unit u)
 {
   return (config_print_platform) ? true : false;
 }
+
+bool get_config_print_exception(unit u)
+{
+  return (config_print_exception) ? true : false;
+}

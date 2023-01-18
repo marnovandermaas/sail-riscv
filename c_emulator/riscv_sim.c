@@ -85,6 +85,7 @@ bool config_print_reg = true;
 bool config_print_mem_access = true;
 bool config_print_platform = true;
 bool config_print_rvfi = false;
+bool config_print_exception = true;
 int config_use_boot_rom = 
 #ifdef NO_BOOT_ROM
 false
@@ -101,6 +102,7 @@ void set_config_print(char *var, bool val)
     config_print_reg = val;
     config_print_platform = val;
     config_print_rvfi = val;
+    config_print_exception = val;
   } else if (strcmp("instr", var) == 0) {
     config_print_instr = val;
   } else if (strcmp("reg", var) == 0) {
@@ -111,9 +113,11 @@ void set_config_print(char *var, bool val)
     config_print_rvfi = val;
   } else if (strcmp("platform", var) == 0) {
     config_print_platform = val;
+  } else if (strcmp("exception", var) == 0) {
+    config_print_exception = val;
   } else {
     fprintf(stderr, "Unknown trace category: '%s' (should be %s)\n",
-            "instr|reg|mem|platform|all", var);
+            "instr|reg|mem|exception|platform|all", var);
     exit(1);
   }
 }
