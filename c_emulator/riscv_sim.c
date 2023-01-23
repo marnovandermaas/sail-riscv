@@ -80,12 +80,12 @@ uint64_t mem_sig_start = 0;
 uint64_t mem_sig_end = 0;
 int signature_granularity = 4;
 
-bool config_print_instr = true;
-bool config_print_reg = true;
-bool config_print_mem_access = true;
-bool config_print_platform = true;
+bool config_print_instr = false;
+bool config_print_reg = false;
+bool config_print_mem_access = false;
+bool config_print_platform = false;
 bool config_print_rvfi = false;
-bool config_print_exception = true;
+bool config_print_exception = false;
 int config_use_boot_rom = 
 #ifdef NO_BOOT_ROM
 false
