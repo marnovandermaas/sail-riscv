@@ -1053,7 +1053,7 @@ dump_state:
   if (diverged) {
     /* TODO */
   }
-  finish(diverged);
+  finish(diverged | zhtif_exit_code);
 
 step_exception:
   fprintf(stderr, "Sail exception!");
