@@ -49,9 +49,15 @@ uint64_t rv_htif_tohost = UINT64_C(0x80001000);
 uint64_t rv_insns_per_tick = UINT64_C(100);
 
 int term_fd = 1; // set during startup
+extern bool have_newline;
 void plat_term_write_impl(char c)
 {
   if (write(term_fd, &c, sizeof(c)) < 0) {
     fprintf(stderr, "Unable to write to terminal!\n");
   }
+  /* Trace output always goes to stdout. If the terminal is also going to stdout
+   * we try to separate them by inserting new lines before trace output when
+   * necessary (see riscv_prelude.c). */
+  if (term_fd == 1)
+    have_newline = c == '\n';
 }
