@@ -41,6 +41,9 @@ function is_CSR_defined (csr : csreg, p : Privilege) -> bool =
     0x343 => p == Machine, // mtval
     0x344 => p == Machine, // mip
 
+    0x747 => p == Machine, // mseccfg
+    0x757 => p == Machine & (sizeof(xlen) == 32), // mseccfgh
+
     // pmpcfgN
     0x3A @ idx : bits(4) => p == Machine & sys_pmp_count() > unsigned(idx) & (idx[0] == bitzero | sizeof(xlen) == 32),
 

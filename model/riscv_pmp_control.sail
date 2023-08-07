@@ -48,14 +48,42 @@ function pmpCheckRWX(ent, acc) = {
   }
 }
 
-// this needs to be called with the effective current privilege.
-val pmpCheckPerms: (Pmpcfg_ent, AccessType(ext_access_type), Privilege) -> bool
+/* this needs to be called with the effective current privilege */
+val pmpCheckPerms: (Pmpcfg_ent, AccessType(ext_access_type), Privilege) -> bool effect {rreg}
 function pmpCheckPerms(ent, acc, priv) = {
-  match priv {
-    Machine => if   pmpLocked(ent)
-               then pmpCheckRWX(ent, acc)
-               else true,
-    _       => pmpCheckRWX(ent, acc)
+  match mseccfg.MML() {
+    0b1 =>
+      match (ent.L(), ent.R(), ent.W(), ent.X()) {
+        (0b1, 0b0, 0b1, _) =>
+          match acc {
+            Execute(_) => true,
+            Read(_)    => priv == Machine & ent.X() == 0b1,
+            _          => false
+          },
+        (0b0, 0b0, 0b1, _) =>
+          match acc {
+            Read(_)  => true,
+            Write(_) => priv == Machine | ent.X() == 0b1,
+            _        => false
+          },
+        (0b1, 0b1, 0b1, 0b1) =>
+          match acc {
+            Read(_) => true,
+            _       => false
+          },
+        (_, _, _, _) =>
+          if (priv == Machine) == pmpLockBit(ent)
+          then pmpCheckRWX(ent, acc)
+          else false
+      },
+    0b0 =>
+      match priv {
+        Machine =>
+          if pmpLockBit(ent)
+          then pmpCheckRWX(ent, acc)
+          else true,
+        _       => pmpCheckRWX(ent, acc)
+      }
   }
 }
 
@@ -101,28 +129,102 @@ function pmpMatchEntry(addr: int, width: int, acc: AccessType(ext_access_type), 
 
 /* priority checks */
 
-function accessToFault(acc : AccessType(ext_access_type)) -> ExceptionType =
-  match acc {
-    Read(_)      => E_Load_Access_Fault(),
-    Write(_)     => E_SAMO_Access_Fault(),
-    ReadWrite(_) => E_SAMO_Access_Fault(),
-    Execute()    => E_Fetch_Access_Fault(),
+function pmpCheck forall 'n, 'n > 0. (addr: xlenbits, width: atom('n), acc: AccessType(ext_access_type), priv: Privilege)
+                  -> option(ExceptionType) = {
+  let width : xlenbits = to_bits(sizeof(xlen), width);
+  let check : bool =
+  match pmpMatchEntry(addr, width, acc, priv, pmp0cfg, pmpaddr0, zeros()) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp1cfg, pmpaddr1, pmpaddr0) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp2cfg, pmpaddr2, pmpaddr1) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp3cfg, pmpaddr3, pmpaddr2) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp4cfg, pmpaddr4, pmpaddr3) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp5cfg, pmpaddr5, pmpaddr4) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp6cfg, pmpaddr6, pmpaddr5) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp7cfg, pmpaddr7, pmpaddr6) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp8cfg, pmpaddr8, pmpaddr7) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp9cfg, pmpaddr9, pmpaddr8) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp10cfg, pmpaddr10, pmpaddr9) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp11cfg, pmpaddr11, pmpaddr10) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp12cfg, pmpaddr12, pmpaddr11) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp13cfg, pmpaddr13, pmpaddr12) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp14cfg, pmpaddr14, pmpaddr13) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+  match pmpMatchEntry(addr, width, acc, priv, pmp15cfg, pmpaddr15, pmpaddr14) {
+    PMP_Success  => true,
+    PMP_Fail     => false,
+    PMP_Continue =>
+      match priv {
+        Machine =>
+          if mseccfg.MMWP() == 0b1                /* Make Read, Write and execute denied by default, if condition meets for M mode */
+          then false
+          else if mseccfg.MML() == 0b1            /* Make execute denied, if condition meets for M mode */
+          then match acc {
+                 Execute(_) => false,
+                 _          => true
+               }
+          else true,
+        _       => false                          /* Make Read, Write and execute denied by default for S/U mode */
+      }
+  }}}}}}}}}}}}}}}};
+
+  if   check
+  then None()
+  else match acc {
+    Read(_)      => Some(E_Load_Access_Fault()),
+    Write(_)     => Some(E_SAMO_Access_Fault()),
+    ReadWrite(_) => Some(E_SAMO_Access_Fault()),
+    Execute()    => Some(E_Fetch_Access_Fault())
   }
 
-function pmpCheck forall 'n, 'n > 0. (addr: int, width: int('n), acc: AccessType(ext_access_type), priv: Privilege)
-                  -> option(ExceptionType) = {
-  foreach (i from 0 to 3) {
-    let prev_pmpaddr = (if i > 0 then pmpReadAddrReg(i - 1) else zeros());
-    match pmpMatchEntry(addr, width, acc, priv, pmpcfg_n[i], pmpReadAddrReg(i), prev_pmpaddr) {
-      PMP_Success  => { return None(); },
-      PMP_Fail     => { return Some(accessToFault(acc)); },
-      PMP_Continue => (),
-    }
-  };
-  if priv == Machine then None() else Some(accessToFault(acc))
-}
-
 function init_pmp() -> unit = {
+  mseccfg->RLB() = 0b0;
+  mseccfg->MML() = 0b0;
+  mseccfg->MMWP() = 0b0;
+  mseccfgh = zero_extend(0b0);
   foreach (i from 0 to 63) {
     // On reset the PMP register's A and L bits are set to 0 unless the plaform
     // mandates a different value.
