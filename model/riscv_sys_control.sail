@@ -505,6 +505,8 @@ function init_sys() -> unit = {
   mstatus = set_mstatus_UXL(mstatus, misa[MXL]);
   mstatus[SD]   = 0b0;
 
+  mstatus[MPP]  = 0b11;
+
   /* set to little-endian mode */
   if sizeof(xlen) == 64 then {
     mstatus = Mk_Mstatus([mstatus.bits with 37 .. 36 = 0b00])
