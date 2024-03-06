@@ -75,7 +75,7 @@ function phys_mem_segments() =
 
 /* Physical memory map predicates */
 
-function within_phys_mem forall 'n, 'n <= max_mem_access. (addr : xlenbits, width : atom('n)) -> bool = {
+function within_phys_mem forall 'n, 'n <= max_mem_access. (addr : xlenbits, width : int('n)) -> bool = {
   /* To avoid overflow issues when physical memory extends to the end
    * of the addressable range, we need to perform address bound checks
    * on unsigned unbounded integers.
@@ -103,7 +103,7 @@ function within_phys_mem forall 'n, 'n <= max_mem_access. (addr : xlenbits, widt
   }
 }
 
-function within_clint forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : atom('n)) -> bool = {
+function within_clint forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : int('n)) -> bool = {
   /* To avoid overflow issues when physical memory extends to the end
    * of the addressable range, we need to perform address bound checks
    * on unsigned unbounded integers.
@@ -115,10 +115,10 @@ function within_clint forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, wi
   & (addr_int + sizeof('n)) <= (clint_base_int + clint_size_int)
 }
 
-function within_htif_writable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : atom('n)) -> bool =
+function within_htif_writable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : int('n)) -> bool =
     plat_htif_tohost() == addr | (plat_htif_tohost() + 4 == addr & width == 4)
 
-function within_htif_readable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : atom('n)) -> bool =
+function within_htif_readable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : int('n)) -> bool =
     plat_htif_tohost() == addr | (plat_htif_tohost() + 4 == addr & width == 4)
 
 function within_uart forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : atom('n)) -> bool = {
@@ -401,17 +401,17 @@ function htif_tick() = {
 
 /* Top-level MMIO dispatch */
 $ifndef RVFI_DII
-function within_mmio_readable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : atom('n)) -> bool =
+function within_mmio_readable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : int('n)) -> bool =
   within_uart (addr, width) | within_clint(addr, width) | (within_htif_readable(addr, width) & 1 <= 'n)
 $else
-function within_mmio_readable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : atom('n)) -> bool = false
+function within_mmio_readable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : int('n)) -> bool = false
 $endif
 
 $ifndef RVFI_DII
-function within_mmio_writable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : atom('n)) -> bool =
+function within_mmio_writable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : int('n)) -> bool =
   within_uart (addr, width) | within_clint(addr, width) | (within_htif_writable(addr, width) & 'n <= 8)
 $else
-function within_mmio_writable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : atom('n)) -> bool = false
+function within_mmio_writable forall 'n, 0 < 'n <= max_mem_access . (addr : xlenbits, width : int('n)) -> bool = false
 $endif
 
 /* This is a very minimal UART implementation: just enough to allow a basic
@@ -469,7 +469,7 @@ function uart_store(addr, width, data) = {
   }
 }
 
-function mmio_read forall 'n, 0 < 'n <= max_mem_access . (t : AccessType(ext_access_type), paddr : xlenbits, width : atom('n)) -> MemoryOpResult(bits(8 * 'n)) =
+function mmio_read forall 'n, 0 < 'n <= max_mem_access . (t : AccessType(ext_access_type), paddr : xlenbits, width : int('n)) -> MemoryOpResult(bits(8 * 'n)) =
   if   within_uart(paddr, width)
   then uart_load(t, paddr, width)
   else if within_clint(paddr, width)
@@ -482,7 +482,7 @@ function mmio_read forall 'n, 0 < 'n <= max_mem_access . (t : AccessType(ext_acc
     _          => MemException(E_SAMO_Access_Fault())
   }
 
-function mmio_write forall 'n, 0 <'n <= max_mem_access . (paddr : xlenbits, width : atom('n), data: bits(8 * 'n)) -> MemoryOpResult(bool) =
+function mmio_write forall 'n, 0 <'n <= max_mem_access . (paddr : xlenbits, width : int('n), data: bits(8 * 'n)) -> MemoryOpResult(bool) =
   if   within_uart(paddr, width)
   then uart_store(paddr, width, data)
   else if within_clint(paddr, width)
