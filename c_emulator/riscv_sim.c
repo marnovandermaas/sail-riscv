@@ -53,6 +53,7 @@ const char *RV32ISA = "RV32IMAC";
 #define OPT_ENABLE_WRITABLE_FIOM 1001
 #define OPT_PMP_COUNT 1002
 #define OPT_PMP_GRAIN 1003
+#define OPT_ENABLE_SVINVAL 10017
 #define OPT_ENABLE_ZCB 10014
 
 static bool do_dump_dts = false;
@@ -159,6 +160,7 @@ static struct option options[] = {
     {"enable-writable-fiom",        no_argument,       0, OPT_ENABLE_WRITABLE_FIOM},
     {"boot-rom",                    no_argument, &config_use_boot_rom, true},
     {"no-boot-rom",                 no_argument, &config_use_boot_rom, false},
+    {"enable-svinval",              no_argument,       0, OPT_ENABLE_SVINVAL      },
     {"enable-zcb",                  no_argument,       0, OPT_ENABLE_ZCB          },
 #ifdef SAILCOV
     {"sailcov-file",                required_argument, 0, 'c'                     },
