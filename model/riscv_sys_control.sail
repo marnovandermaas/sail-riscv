@@ -506,6 +506,7 @@ function init_sys() -> unit = {
   mstatus = set_mstatus_SXL(mstatus, misa[MXL]);
   mstatus = set_mstatus_UXL(mstatus, misa[MXL]);
   mstatus[SD]   = 0b0;
+  mstatus[MPP] = privLevel_to_bits(lowest_supported_privLevel());
 
   mstatus[MPP]  = 0b11;
 
