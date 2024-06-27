@@ -101,16 +101,9 @@ function checked_mem_read forall 'n, 0 < 'n <= max_mem_access . (
   match phys_access_check(t, priv, paddr, width) {
     Some(e) => MemException(e),
     None() => {
-      if   within_mmio_readable(paddr, width)
-      then MemoryOpResult_add_meta(mmio_read(t, paddr, width), default_meta)
-      else if within_phys_mem(paddr, width)
-      then match ext_check_phys_mem_read(t, paddr, width, aq, rl, res, meta) {
+      match ext_check_phys_mem_read(t, paddr, width, aq, rl, res, meta) {
         Ext_PhysAddr_OK()     => phys_mem_read(t, paddr, width, aq, rl, res, meta),
         Ext_PhysAddr_Error(e) => MemException(e)
-      } else match t {
-        Execute()  => MemException(E_Fetch_Access_Fault()),
-        Read(Data) => MemException(E_Load_Access_Fault()),
-        _          => MemException(E_SAMO_Access_Fault())
       }
     }
   }
@@ -217,16 +210,11 @@ function checked_mem_write forall 'n, 0 < 'n <= max_mem_access . (
   match phys_access_check(typ, priv, paddr, width) {
     Some(e) => MemException(e),
     None() => {
-      if   within_mmio_writable(paddr, width)
-      then mmio_write(paddr, width, data)
-      else if within_phys_mem(paddr, width)
-      then {
-        let wk = write_kind_of_flags(aq, rl, con);
-        match ext_check_phys_mem_write (wk, paddr, width, data, meta) {
-          Ext_PhysAddr_OK() => phys_mem_write(wk, paddr, width, data, meta),
-          Ext_PhysAddr_Error(e)  => MemException(e),
-        }
-      } else MemException(E_SAMO_Access_Fault())
+      let wk = write_kind_of_flags(aq, rl, con);
+      match ext_check_phys_mem_write (wk, paddr, width, data, meta) {
+        Ext_PhysAddr_OK() => phys_mem_write(wk, paddr, width, data, meta),
+        Ext_PhysAddr_Error(e)  => MemException(e),
+      }
     }
   }
 

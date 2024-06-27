@@ -9,25 +9,11 @@
 // When the symbolic execution is running a litmus test, it sets a
 // different entry point for each thread in the compiled litmus test.
 
-val get_entry_point : unit -> xlenbits
-
-$ifdef SYMBOLIC
-
-$include <elf.sail>
-
-function get_entry_point() = to_bits(sizeof(xlen), elf_entry())
-
-$else
-
-function get_entry_point() = zero_extend(0x1000)
-
-$endif
-
 function main() : unit -> unit = {
   // initialize extensions
   ext_init();
 
-  PC = get_entry_point();
+  PC = zero_extend(0x0);
   print_bits("PC = ", PC);
 
   try {
