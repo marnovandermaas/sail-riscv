@@ -9,16 +9,16 @@
 /* address ranges */
 
 // [min, max) of the matching range, in units of 4 bytes.
-type pmp_addr_range_in_words = option((xlenbits, xlenbits))
+type pmp_addr_range_in_words = option((int, int))
 
 function pmpAddrRange(cfg: Pmpcfg_ent, pmpaddr: xlenbits, prev_pmpaddr: xlenbits) -> pmp_addr_range_in_words = {
   match pmpAddrMatchType_of_bits(cfg[A]) {
     OFF   => None(),
-    TOR   => { Some ((prev_pmpaddr, pmpaddr)) },
+    TOR   => { Some ((unsigned(prev_pmpaddr), unsigned(pmpaddr))) },
     NA4   => {
                // NA4 is not selectable when the PMP grain G >= 1. See pmpWriteCfg().
                assert(sys_pmp_grain() < 1, "NA4 cannot be selected when PMP grain G >= 1.");
-               let lo = pmpaddr;
+               let lo = unsigned(pmpaddr);
                Some((lo, lo + 1))
              },
     NAPOT => {
@@ -30,8 +30,8 @@ function pmpAddrRange(cfg: Pmpcfg_ent, pmpaddr: xlenbits, prev_pmpaddr: xlenbits
                // ~mask:           0b11111100000
                let lo   = pmpaddr & (~ (mask));
                // mask + 1:        0b00000100000
-               let len  = mask + 1;
-               Some((lo, (lo + len)))
+               let len  = unsigned(mask) + 1;
+               Some((unsigned(lo), (unsigned(lo) + len)))
              }
   }
 }
