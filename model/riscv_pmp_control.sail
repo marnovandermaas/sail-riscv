@@ -69,8 +69,8 @@ function pmpMatchAddr(addr: int, width: int, rng: pmp_addr_range_in_words) -> pm
     Some((lo, hi)) => {
       // Convert to integers.
       // These are in units of 4 bytes.
-      let lo = unsigned(lo) * 4;
-      let hi = unsigned(hi) * 4;
+      let lo = lo * 4;
+      let hi = hi * 4;
 
       if   hi <= lo   /* to handle mis-configuration */
       then PMP_NoMatch
