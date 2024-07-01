@@ -88,42 +88,12 @@ instantiation sail_mem_write with
    4096 was chosen because it is a page size, and a reasonable maximum
    for cbo.zero.
    */
-type max_mem_access : Int = 4096
+type max_mem_access : Int = 4
 
-val write_ram : forall 'n, 0 < 'n <= max_mem_access. (write_kind, xlenbits, int('n), bits(8 * 'n), mem_meta) -> bool
+type bebits = bits(4)
 
-function write_ram(wk, addr, width, data, meta) = {
-  let request : Mem_write_request('n, 64, xlenbits, unit, RISCV_strong_access) = struct {
-    access_kind = match wk {
-      Write_plain => AK_explicit(struct { variety = AV_plain, strength = AS_normal }),
-      Write_RISCV_release => AK_explicit(struct { variety = AV_plain, strength = AS_rel_or_acq }),
-      Write_RISCV_strong_release => AK_arch(struct { variety = AV_plain }),
-      Write_RISCV_conditional => AK_explicit(struct { variety = AV_exclusive, strength = AS_normal }),
-      Write_RISCV_conditional_release => AK_explicit(struct { variety = AV_exclusive, strength = AS_rel_or_acq }),
-      Write_RISCV_conditional_strong_release => AK_arch(struct { variety = AV_exclusive }),
-    },
-    va = None(),
-    pa = addr,
-    translation = (),
-    size = width,
-    value = Some(data),
-    tag = None(),
-  };
-  /* Write out metadata only if the value write succeeds.
-   * It is assumed for now that this write always succeeds;
-   * there is currently no return value.
-   * FIXME: We should convert the external API for all backends
-   * (not just for Lem) to consume the value along with the
-   * metadata to ensure atomicity.
-   */
-  match sail_mem_write(request) {
-    Ok(_) => {
-      __WriteRAM_Meta(addr, width, meta);
-      true
-    },
-    Err() => false,
-  }
-}
+val write_ram : (write_kind, xlenbits, xlenbits, bebits) -> unit
+function write_ram(wk, addr, wdata, be) = ()
 
 val write_ram_ea : forall 'n, 0 < 'n <= max_mem_access. (write_kind, xlenbits, int('n)) -> unit
 function write_ram_ea(wk, addr, width) = ()
@@ -131,30 +101,8 @@ function write_ram_ea(wk, addr, width) = ()
 instantiation sail_mem_read with
   pa_bits = xlenbits_identity
 
-val read_ram : forall 'n, 0 < 'n <= max_mem_access.  (read_kind, xlenbits, int('n), bool) -> (bits(8 * 'n), mem_meta)
-function read_ram(rk, addr, width, read_meta) = {
-  let meta = if read_meta then __ReadRAM_Meta(addr, width) else default_meta;
-  let request : Mem_read_request('n, 64, xlenbits, unit, RISCV_strong_access) = struct {
-    access_kind = match rk {
-      Read_plain => AK_explicit(struct { variety = AV_plain, strength = AS_normal }),
-      Read_ifetch => AK_ifetch(),
-      Read_RISCV_acquire => AK_explicit(struct { variety = AV_plain, strength = AS_rel_or_acq }),
-      Read_RISCV_strong_acquire => AK_arch(struct { variety = AV_plain }),
-      Read_RISCV_reserved => AK_explicit(struct { variety = AV_exclusive, strength = AS_normal }),
-      Read_RISCV_reserved_acquire => AK_explicit(struct { variety = AV_exclusive, strength = AS_rel_or_acq }),
-      Read_RISCV_reserved_strong_acquire => AK_arch(struct { variety = AV_exclusive }),
-    },
-    va = None(),
-    pa = addr,
-    translation = (),
-    size = width,
-    tag = false,
-  };
-  match sail_mem_read(request) {
-    Ok((value, _)) => (value, meta),
-    Err() => exit(),
-  }
-}
+val read_ram : (read_kind, xlenbits) -> bits(32)
+function read_ram(rk, addr) = 0x00000000
 
 instantiation sail_barrier with 'barrier = barrier_kind
 

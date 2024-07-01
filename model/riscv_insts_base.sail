@@ -326,19 +326,11 @@ function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) = {
      Some extensions perform additional checks on address validity. */
   match ext_data_get_addr(rs1, offset, Read(Data), width_bytes) {
     Ext_DataAddr_Error(e)  => { ext_handle_data_check_error(e); RETIRE_FAIL },
-    Ext_DataAddr_OK(vaddr) => {
-      if   check_misaligned(vaddr, width)
-      then { handle_mem_exception(vaddr, E_Load_Addr_Align()); RETIRE_FAIL }
-      else match translateAddr(vaddr, Read(Data)) {
-        TR_Failure(e, _) => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
-        TR_Address(paddr, _) =>
-
-          match mem_read(Read(Data), paddr, width_bytes, aq, rl, false) {
-            MemValue(result) => { X(rd) = extend_value(is_unsigned, result); RETIRE_SUCCESS },
-            MemException(e) => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
-          },
+    Ext_DataAddr_OK(paddr) =>
+      match mem_read(Read(Data), paddr, width_bytes, aq, rl, false) {
+        MemValue(result) => { X(rd) = extend_value(is_unsigned, result); RETIRE_SUCCESS },
+        MemException(e) => { handle_mem_exception(paddr, e); RETIRE_FAIL },
       }
-    },
   }
 }
 
@@ -382,26 +374,14 @@ function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) = {
      Some extensions perform additional checks on address validity. */
   match ext_data_get_addr(rs1, offset, Write(Data), width_bytes) {
     Ext_DataAddr_Error(e)  => { ext_handle_data_check_error(e); RETIRE_FAIL },
-    Ext_DataAddr_OK(vaddr) =>
-      if   check_misaligned(vaddr, width)
-      then { handle_mem_exception(vaddr, E_SAMO_Addr_Align()); RETIRE_FAIL }
-      else match translateAddr(vaddr, Write(Data)) {
-        TR_Failure(e, _)    => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
-        TR_Address(paddr, _) => {
-          let eares = mem_write_ea(paddr, width_bytes, aq, rl, false);
-          match (eares) {
-            MemException(e) => { handle_mem_exception(vaddr, e); RETIRE_FAIL },
-            MemValue(_) => {
-              let rs2_val = X(rs2);
-              match mem_write_value(paddr, width_bytes, rs2_val[width_bytes * 8 - 1 .. 0], aq, rl, false) {
-                MemValue(true)  => RETIRE_SUCCESS,
-                MemValue(false) => internal_error(__FILE__, __LINE__, "store got false from mem_write_value"),
-                MemException(e) => { handle_mem_exception(vaddr, e); RETIRE_FAIL }
-              }
-            }
-          }
-        }
+    Ext_DataAddr_OK(paddr) => {
+      let rs2_val = X(rs2);
+      match mem_write_value(paddr, width_bytes, rs2_val[width_bytes * 8 - 1 .. 0], aq, rl, false) {
+        MemValue(true)  => RETIRE_SUCCESS,
+        MemValue(false) => internal_error(__FILE__, __LINE__, "store got false from mem_write_value"),
+        MemException(e) => { handle_mem_exception(paddr, e); RETIRE_FAIL }
       }
+    }
   }
 }
 
@@ -720,10 +700,10 @@ function clause execute SFENCE_VMA(rs1, rs2) = {
     User       => { handle_illegal(); RETIRE_FAIL },
     Supervisor => match (architecture(get_mstatus_SXL(mstatus)), mstatus[TVM]) {
                     (Some(_), 0b1)  => { handle_illegal(); RETIRE_FAIL },
-                    (Some(_), 0b0) => { flush_TLB(asid, addr); RETIRE_SUCCESS },
+                    (Some(_), 0b0) => { /* flush_TLB(asid, addr); */ RETIRE_SUCCESS },
                     (_, _)           => internal_error(__FILE__, __LINE__, "unimplemented sfence architecture")
                   },
-    Machine    => { flush_TLB(asid, addr); RETIRE_SUCCESS }
+    Machine    => { /* flush_TLB(asid, addr); */ RETIRE_SUCCESS }
   }
 }
 

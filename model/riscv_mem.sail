@@ -64,38 +64,30 @@ function write_kind_of_flags (aq : bool, rl : bool, con : bool) -> write_kind =
   }
 
 // only used for actual memory regions, to avoid MMIO effects
-function phys_mem_read forall 'n, 0 < 'n <= max_mem_access . (t : AccessType(ext_access_type), paddr : xlenbits, width : int('n), aq : bool, rl: bool, res : bool, meta : bool) -> MemoryOpResult((bits(8 * 'n), mem_meta)) = {
+function phys_mem_read_word_aligned (t : AccessType(ext_access_type), paddr : xlenbits, aq: bool, rl: bool, res: bool) -> MemoryOpResult(bits(32)) = {
   let result = (match read_kind_of_flags(aq, rl, res) {
-    Some(rk) => Some(read_ram(rk, paddr, width, meta)),
+    Some(rk) => Some(read_ram(rk, paddr)),
     None()   => None()
-  }) : option((bits(8 * 'n), mem_meta));
+  }) : option(bits(32));
   match (t, result) {
     (Execute(),  None()) => MemException(E_Fetch_Access_Fault()),
     (Read(Data), None()) => MemException(E_Load_Access_Fault()),
     (_,          None()) => MemException(E_SAMO_Access_Fault()),
-    (_,      Some(v, m)) => { if   get_config_print_mem()
+    (_,      Some(v)) => { if   get_config_print_mem()
                               then print_mem("mem[" ^ to_str(t) ^ "," ^ BitStr(paddr) ^ "] -> " ^ BitStr(v));
-                              MemValue(v, m) }
+                              MemValue(v) }
   }
 }
 
-// Check if access is permitted according to PMPs and PMAs.
-val phys_access_check : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), Privilege, xlenbits, int('n)) -> option(ExceptionType)
-function phys_access_check (t, p, paddr, width) = {
-  if sys_pmp_count() == 0 then {
-    return None()
-  };
-  let aligned = [paddr with 1..0 = 0b00];
-  match pmpCheck(unsigned(aligned), 4, t, p) {
-    Some(e) => Some(e),
-    None() =>
-      if 4 - unsigned(paddr[1..0]) < width
-      then pmpCheck(unsigned(aligned + zero_extend(0x4)), 4, t, p)
-      else None()
+function extract_bits forall 'n, 0 < 'n <= max_mem_access . (value : bits(64), addroff: bits(2), width: int('n)) -> bits(8 * 'n) =
+  match addroff {
+    0b00 => value[width*8 - 1..0],
+    0b01 => value[width*8 - 1 + 8..8],
+    0b10 => value[width*8 - 1 + 16..16],
+    0b11 => value[width*8 - 1 + 24..24],
   }
-}
 
-/* dispatches to MMIO regions or physical memory regions depending on physical memory map */
+/* Does either 1 or 2 memory accesses based on alignment and width */
 function checked_mem_read forall 'n, 0 < 'n <= max_mem_access . (
   t : AccessType(ext_access_type),
   priv : Privilege,
@@ -103,18 +95,33 @@ function checked_mem_read forall 'n, 0 < 'n <= max_mem_access . (
   width : int('n),
   aq : bool,
   rl : bool,
-  res: bool,
-  meta : bool,
-) -> MemoryOpResult((bits(8 * 'n), mem_meta)) =
-  match phys_access_check(t, priv, paddr, width) {
+  res: bool
+) -> MemoryOpResult(bits(8 * 'n)) = {
+  let aligned = [paddr with 1..0 = 0b00];
+  let aligned_next = aligned + zero_extend(0x4);
+
+  let res_fst = (match pmpCheck(unsigned(aligned), 4, t, priv) {
     Some(e) => MemException(e),
-    None() => {
-      match ext_check_phys_mem_read(t, paddr, width, aq, rl, res, meta) {
-        Ext_PhysAddr_OK()     => phys_mem_read(t, paddr, width, aq, rl, res, meta),
-        Ext_PhysAddr_Error(e) => MemException(e)
-      }
+    None() => phys_mem_read_word_aligned(t, aligned, aq, rl, res),
+  }) : MemoryOpResult(bits(32));
+
+  if 4 - unsigned(paddr[1..0]) < width then {
+    let res_snd = (match pmpCheck(unsigned(aligned_next), 4, t, priv) {
+      Some(e) => MemException(e),
+      None() => phys_mem_read_word_aligned(t, aligned_next, aq, rl, res),
+    }) : MemoryOpResult(bits(32));
+
+    match (res_fst, res_snd) {
+      (MemException(e), _) => MemException(e),
+      (MemValue(_), MemException(e)) => MemException(e),
+      (MemValue(v1), MemValue(v2)) => MemValue(extract_bits(v2 @ v1, paddr[1..0], width))
     }
-  }
+  } else
+    match res_fst {
+      MemException(e) => MemException(e),
+      MemValue(v) => MemValue(extract_bits(0x00000000 @ v, paddr[1..0], width))
+    }
+}
 
 /* Atomic accesses can be done to MMIO regions, e.g. in kernel access to device registers. */
 
@@ -139,29 +146,19 @@ $endif
 
 val mem_read      : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), xlenbits, int('n), bool, bool, bool)       -> MemoryOpResult(bits(8 * 'n))
 val mem_read_priv : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), Privilege, xlenbits, int('n), bool, bool, bool)       -> MemoryOpResult(bits(8 * 'n))
-val mem_read_meta : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), xlenbits, int('n), bool, bool, bool, bool) -> MemoryOpResult((bits(8 * 'n), mem_meta))
-val mem_read_priv_meta : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), Privilege, xlenbits, int('n), bool, bool, bool, bool) -> MemoryOpResult((bits(8 * 'n), mem_meta))
 
 /* The most generic memory read operation */
-function mem_read_priv_meta (typ, priv, paddr, width, aq, rl, res, meta) = {
-  let result : MemoryOpResult((bits(8 * 'n), mem_meta)) =
+function mem_read_priv (typ, priv, paddr, width, aq, rl, res) = {
+  let result : MemoryOpResult(bits(8 * 'n)) =
     if (aq | res) & not(is_aligned_addr(paddr, width))
     then MemException(E_Load_Addr_Align())
     else match (aq, rl, res) {
       (false, true,  false) => throw(Error_not_implemented("load.rl")),
       (false, true,  true)  => throw(Error_not_implemented("lr.rl")),
-      (_, _, _)             => checked_mem_read(typ, priv, paddr, width, aq, rl, res, meta)
+      (_, _, _)             => checked_mem_read(typ, priv, paddr, width, aq, rl, res)
     };
-  rvfi_read(paddr, width, result);
   result
 }
-
-function mem_read_meta (typ, paddr, width, aq, rl, res, meta) =
-  mem_read_priv_meta(typ, effectivePrivilege(typ, mstatus, cur_privilege), paddr, width, aq, rl, res, meta)
-
-/* Specialized mem_read_meta that drops the metadata */
-function mem_read_priv (typ, priv, paddr, width, aq, rl, res) =
-  MemoryOpResult_drop_meta(mem_read_priv_meta(typ, priv, paddr, width, aq, rl, res, false))
 
 /* Specialized mem_read_priv that operates at the default effective privilege */
 function mem_read (typ, paddr, width, aq, rel, res) =
@@ -195,12 +192,36 @@ val rvfi_write : forall 'n, 'n > 0. (xlenbits, int('n), bits(8 * 'n), mem_meta, 
 function rvfi_write (addr, width, value, meta, result) = ()
 $endif
 
+function split_bits_byte (value : bits(8), addroff: bits(2)) -> (bits(32), bits(4), bits(32), bits(4)) =
+  match addroff {
+    0b00 => (0x000000 @ value, 0b0001, 0x00000000, 0b0000),
+    0b01 => (0x0000 @ value @ 0x00, 0b0010, 0x00000000, 0b0000),
+    0b10 => (0x00 @ value @ 0x0000, 0b0100, 0x00000000, 0b0000),
+    0b11 => (value @ 0x000000, 0b1000, 0x00000000, 0b0000),
+  }
+
+function split_bits_half (value : bits(16), addroff: bits(2)) -> (bits(32), bits(4), bits(32), bits(4)) =
+  match addroff {
+    0b00 => (0x0000 @ value, 0b0011, 0x00000000, 0b0000),
+    0b01 => (0x00 @ value @ 0x00, 0b0110, 0x00000000, 0b0000),
+    0b10 => (value @ 0x0000, 0b1100, 0x00000000, 0b0000),
+    0b11 => (value[7..0] @ 0x000000, 0b1000, 0x000000 @ value[15..8], 0b0001),
+  }
+
+function split_bits_word (value : bits(32), addroff: bits(2)) -> (bits(32), bits(4), bits(32), bits(4)) =
+  match addroff {
+    0b00 => (value, 0b1111, 0x00000000, 0b0000),
+    0b01 => (value[23..0] @ 0x00, 0b1110, 0x000000 @ value[31..24], 0b0001),
+    0b10 => (value[15..0] @ 0x0000, 0b1100, 0x0000 @ value[31..16], 0b0011),
+    0b11 => (value[7..0] @ 0x000000, 0b1000, 0x00 @ value[31..8], 0b0111),
+  }
+
 // only used for actual memory regions, to avoid MMIO effects
-function phys_mem_write forall 'n, 0 < 'n <= max_mem_access . (wk : write_kind, paddr : xlenbits, width : int('n), data : bits(8 * 'n), meta : mem_meta) -> MemoryOpResult(bool) = {
-  let result = MemValue(write_ram(wk, paddr, width, data, meta));
+function phys_mem_write_word_aligned (wk : write_kind, paddr : xlenbits, data : bits(32), be : bits(4)) -> MemoryOpResult(bool) = {
+  write_ram(wk, paddr, data, be);
   if   get_config_print_mem()
   then print_mem("mem[" ^ BitStr(paddr) ^ "] <- " ^ BitStr(data));
-  result
+  MemValue(true)
 }
 
 /* dispatches to MMIO regions or physical memory regions depending on physical memory map */
@@ -214,17 +235,37 @@ function checked_mem_write forall 'n, 0 < 'n <= max_mem_access . (
   aq : bool,
   rl : bool,
   con : bool,
-) -> MemoryOpResult(bool) =
-  match phys_access_check(typ, priv, paddr, width) {
+) -> MemoryOpResult(bool) = {
+  let aligned = [paddr with 1..0 = 0b00];
+  let aligned_next = aligned + zero_extend(0x4);
+
+  let wk = write_kind_of_flags(aq, rl, con);
+
+  let (fst_data, fst_be, snd_data, snd_be) = (match width {
+    1 => split_bits_byte(data, paddr[1..0]),
+    2 => split_bits_half(data, paddr[1..0]),
+    4 => split_bits_word(data, paddr[1..0]),
+    _ => internal_error(__FILE__, __LINE__, "store got bad width")
+  }) : (bits(32), bits(4), bits(32), bits(4));
+
+  let res_fst = (match pmpCheck(unsigned(aligned), 4, typ, priv) {
     Some(e) => MemException(e),
-    None() => {
-      let wk = write_kind_of_flags(aq, rl, con);
-      match ext_check_phys_mem_write (wk, paddr, width, data, meta) {
-        Ext_PhysAddr_OK() => phys_mem_write(wk, paddr, width, data, meta),
-        Ext_PhysAddr_Error(e)  => MemException(e),
-      }
+    None() => phys_mem_write_word_aligned(wk, aligned, fst_data, fst_be),
+  }) : MemoryOpResult(bool);
+
+  if 4 - unsigned(paddr[1..0]) < width then {
+    let res_snd = (match pmpCheck(unsigned(aligned_next), 4, typ, priv) {
+      Some(e) => MemException(e),
+      None() => phys_mem_write_word_aligned(wk, aligned_next, snd_data, snd_be),
+    }) : MemoryOpResult(bool);
+
+    match (res_fst, res_snd) {
+      (MemException(e), _) => MemException(e),
+      (MemValue(_), MemException(e)) => MemException(e),
+      (MemValue(_), MemValue(_)) => MemValue(true)
     }
-  }
+  } else res_fst
+}
 
 /* Atomic accesses can be done to MMIO regions, e.g. in kernel access to device registers. */
 
