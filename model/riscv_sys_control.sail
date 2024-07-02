@@ -45,49 +45,15 @@ function is_CSR_defined (csr : csreg, p : Privilege) -> bool =
     0x3A @ idx : bits(4) => p == Machine & sys_pmp_count() > unsigned(idx) & (idx[0] == bitzero | sizeof(xlen) == 32),
 
     // pmpaddrN. Unfortunately the PMP index does not nicely align with the CSR index bits.
-    0x3B @ idx : bits(4) => p == Machine & sys_pmp_count() > unsigned(0b00 @ idx),
-    0x3C @ idx : bits(4) => p == Machine & sys_pmp_count() > unsigned(0b01 @ idx),
-    0x3D @ idx : bits(4) => p == Machine & sys_pmp_count() > unsigned(0b10 @ idx),
-    0x3E @ idx : bits(4) => p == Machine & sys_pmp_count() > unsigned(0b11 @ idx),
+    0x3B @ idx : bits(4) => p == Machine & sys_pmp_max_count() > unsigned(0b00 @ idx),
+    0x3C @ idx : bits(4) => p == Machine & sys_pmp_max_count() > unsigned(0b01 @ idx),
+    0x3D @ idx : bits(4) => p == Machine & sys_pmp_max_count() > unsigned(0b10 @ idx),
+    0x3E @ idx : bits(4) => p == Machine & sys_pmp_max_count() > unsigned(0b11 @ idx),
     0xB00 => p == Machine, // mcycle
     0xB02 => p == Machine, // minstret
 
     0xB80 => p == Machine & (sizeof(xlen) == 32), // mcycleh
     0xB82 => p == Machine & (sizeof(xlen) == 32), // minstreth
-
-    /* disabled trigger/debug module */
-    0x7a0 => p == Machine,
-
-    /* supervisor mode: trap setup */
-    0x100 => haveSupMode() & (p == Machine | p == Supervisor), // sstatus
-    0x102 => haveSupMode() & haveNExt() & (p == Machine | p == Supervisor), // sedeleg
-    0x103 => haveSupMode() & haveNExt() & (p == Machine | p == Supervisor), // sideleg
-    0x104 => haveSupMode() & (p == Machine | p == Supervisor), // sie
-    0x105 => haveSupMode() & (p == Machine | p == Supervisor), // stvec
-    0x106 => haveSupMode() & (p == Machine | p == Supervisor), // scounteren
-    0x10A => haveSupMode() & (p == Machine | p == Supervisor), // senvcfg
-
-    /* supervisor mode: trap handling */
-    0x140 => haveSupMode() & (p == Machine | p == Supervisor), // sscratch
-    0x141 => haveSupMode() & (p == Machine | p == Supervisor), // sepc
-    0x142 => haveSupMode() & (p == Machine | p == Supervisor), // scause
-    0x143 => haveSupMode() & (p == Machine | p == Supervisor), // stval
-    0x144 => haveSupMode() & (p == Machine | p == Supervisor), // sip
-
-    /* supervisor mode: address translation */
-    0x180 => haveSupMode() & (p == Machine | p == Supervisor), // satp
-
-    /* user mode: counters */
-    0xC00 => haveUsrMode(),    // cycle
-    0xC01 => haveUsrMode(),    // time
-    0xC02 => haveUsrMode(),    // instret
-
-    0xC80 => haveUsrMode() & (sizeof(xlen) == 32),     // cycleh
-    0xC81 => haveUsrMode() & (sizeof(xlen) == 32),     // timeh
-    0xC82 => haveUsrMode() & (sizeof(xlen) == 32),     // instreth
-
-    /* user mode: Zkr */
-    0x015 => haveZkr(),
 
     /* check extensions */
     _     => ext_is_CSR_defined(csr, p)
@@ -98,15 +64,8 @@ function check_CSR_access(csrrw, csrpr, p, isWrite) =
     not(isWrite == true & csrrw == 0b11)  /* read/write */
   & (privLevel_to_bits(p) >=_u csrpr)      /* privilege */
 
-function check_TVM_SATP(csr : csreg, p : Privilege) -> bool =
-  not(csr == 0x180 & p == Supervisor & mstatus[TVM] == 0b1)
-
 function check_Counteren(csr : csreg, p : Privilege) -> bool =
   match(csr, p) {
-    (0xC00, Supervisor) => mcounteren[CY] == 0b1,
-    (0xC01, Supervisor) => mcounteren[TM] == 0b1,
-    (0xC02, Supervisor) => mcounteren[IR] == 0b1,
-
     (0xC00, User) => mcounteren[CY] == 0b1 & (not(haveSupMode()) | scounteren[CY] == 0b1),
     (0xC01, User) => mcounteren[TM] == 0b1 & (not(haveSupMode()) | scounteren[TM] == 0b1),
     (0xC02, User) => mcounteren[IR] == 0b1 & (not(haveSupMode()) | scounteren[IR] == 0b1),
@@ -117,31 +76,10 @@ function check_Counteren(csr : csreg, p : Privilege) -> bool =
               else true
   }
 
-
-/* Seed may only be accessed if we are doing a write, and access has been
- * allowed in the current priv mode
- */
-function check_seed_CSR (csr : csreg, p : Privilege, isWrite : bool) -> bool = {
-  if not(csr == 0x015) then {
-    true
-  } else if not(isWrite) then {
-    /* Read-only access to the seed CSR is not allowed */
-    false
-  } else {
-    match (p) {
-      Machine => true,
-      Supervisor => false, /* TODO: base this on mseccfg */
-      User => false, /* TODO: base this on mseccfg */
-    }
-  }
-}
-
 function check_CSR(csr : csreg, p : Privilege, isWrite : bool) -> bool =
     is_CSR_defined(csr, p)
   & check_CSR_access(csrAccess(csr), csrPriv(csr), p, isWrite)
-  & check_TVM_SATP(csr, p)
   & check_Counteren(csr, p)
-  & check_seed_CSR(csr, p, isWrite)
 
 /* Reservation handling for LR/SC.
  *

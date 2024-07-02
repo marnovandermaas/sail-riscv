@@ -96,11 +96,13 @@ val sys_enable_next = {c: "sys_enable_next", ocaml: "Platform.enable_next", _: "
    supervisor mode is implemented and non-bare addressing modes are supported. */
 val sys_enable_writable_fiom = {c: "sys_enable_writable_fiom", ocaml: "Platform.enable_writable_fiom", _: "sys_enable_writable_fiom"} : unit -> bool
 
-/* How many PMP entries are implemented. This must be 0, 16 or 64 (this is checked at runtime). */
+/* How many PMP entries are implemented */
 val sys_pmp_count = {c: "sys_pmp_count", ocaml: "Platform.pmp_count", _: "sys_pmp_count"} : unit -> range(0, 64)
 /* G parameter that specifies the PMP grain size. The grain size is 2^(G+2), e.g.
    G=0 -> 4 bytes, G=10 -> 4096 bytes. */
 val sys_pmp_grain = {c: "sys_pmp_grain", ocaml: "Platform.pmp_grain", _: "sys_pmp_grain"} : unit -> range(0, 63)
+/* Max PMP count, is the number of hardwired to zero PMP registers + the number of real sys_pmp_count() */
+val sys_pmp_max_count = {c: "sys_pmp_max_count", ocaml: "Platform.pmp_max_count", _: "sys_pmp_max_count"} : unit -> range(0, 64)
 
 /* whether misa.v was enabled at boot */
 val sys_enable_vext = {c: "sys_enable_vext", ocaml: "Platform.enable_vext", _: "sys_enable_vext"} : unit -> bool
@@ -431,12 +433,8 @@ bitfield Mtvec : xlenbits = {
 register mtvec : Mtvec  /* Trap Vector */
 
 function legalize_tvec(o : Mtvec, v : xlenbits) -> Mtvec = {
- let v = Mk_Mtvec(v);
- match (trapVectorMode_of_bits(v[Mode])) {
-   TV_Direct => v,
-   TV_Vector => v,
-   _         => [v with Mode = o[Mode]]
- }
+ // 256 byte aligned, always vectored
+ Mk_Mtvec(v[31..8] @ 0x01)
 }
 
 bitfield Mcause : xlenbits = {
@@ -444,6 +442,14 @@ bitfield Mcause : xlenbits = {
   Cause       : xlen - 2 .. 0
 }
 register mcause : Mcause
+
+function legalize_mcause(v : xlenbits) -> Mcause = {
+  // Ibex internal interrupts
+  if v[31..30] == 0b11 then
+    Mk_Mcause([v with 30..5 = sail_ones(26)])
+  else
+    Mk_Mcause([v with 30..5 = sail_zeros(26)])
+}
 
 /* Interpreting the trap-vector address */
 function tvec_addr(m : Mtvec, c : Mcause) -> option(xlenbits) = {
@@ -491,16 +497,6 @@ bitfield Counteren : bits(32) = {
 
 register mcounteren : Counteren
 register scounteren : Counteren
-
-function legalize_mcounteren(c : Counteren, v : xlenbits) -> Counteren = {
-  /* no HPM counters yet */
-  [c with IR = [v[2]], TM = [v[1]], CY = [v[0]]]
-}
-
-function legalize_scounteren(c : Counteren, v : xlenbits) -> Counteren = {
-  /* no HPM counters yet */
-  [c with IR = [v[2]], TM = [v[1]], CY = [v[0]]]
-}
 
 bitfield Counterin : bits(32) = {
   /* no HPM counters yet */

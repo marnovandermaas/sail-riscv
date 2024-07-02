@@ -117,6 +117,10 @@ function pmpWriteCfg(n: range(0, 63), cfg: Pmpcfg_ent, v: bits(8)) -> Pmpcfg_ent
   }
 
 function pmpWriteCfgReg(n : range(0, 15), v : xlenbits) -> unit = {
+  if n >= sys_pmp_count() then {
+    return ();
+  };
+
   if sizeof(xlen) == 32
   then {
     foreach (i from 0 to 3) {
@@ -139,6 +143,10 @@ function pmpWriteAddr(locked: bool, tor_locked: bool, reg: xlenbits, v: xlenbits
   else { if (locked | tor_locked) then reg else zero_extend(v[53..0]) }
 
 function pmpWriteAddrReg(n : range(0, 63), v : xlenbits) -> unit = {
+  if n >= sys_pmp_count() then {
+    return ();
+  };
+
   pmpaddr_n[n] = pmpWriteAddr(
     pmpLocked(pmpcfg_n[n]),
     if n + 1 < 64 then pmpTORLocked(pmpcfg_n[n + 1]) else false,
