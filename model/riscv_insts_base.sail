@@ -326,11 +326,20 @@ function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) = {
      Some extensions perform additional checks on address validity. */
   match ext_data_get_addr(rs1, offset, Read(Data), width_bytes) {
     Ext_DataAddr_Error(e)  => { ext_handle_data_check_error(e); RETIRE_FAIL },
-    Ext_DataAddr_OK(paddr) =>
-      match mem_read(Read(Data), paddr, width_bytes, aq, rl, false) {
+    Ext_DataAddr_OK(paddr) => match width_bytes {
+      1 => match mem_read(Read(Data), paddr, 1, aq, rl, false) {
+        MemValue(result) => { X(rd) = extend_value(is_unsigned, result); RETIRE_SUCCESS },
+        MemException(e) => { handle_mem_exception(paddr, e); RETIRE_FAIL },
+      },
+      2 => match mem_read(Read(Data), paddr, 2, aq, rl, false) {
+        MemValue(result) => { X(rd) = extend_value(is_unsigned, result); RETIRE_SUCCESS },
+        MemException(e) => { handle_mem_exception(paddr, e); RETIRE_FAIL },
+      },
+      4 => match mem_read(Read(Data), paddr, 4, aq, rl, false) {
         MemValue(result) => { X(rd) = extend_value(is_unsigned, result); RETIRE_SUCCESS },
         MemException(e) => { handle_mem_exception(paddr, e); RETIRE_FAIL },
       }
+    }
   }
 }
 
