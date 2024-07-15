@@ -113,7 +113,7 @@ function pt_walk(sv_params,
                                  false);                  // res
 
   match mem_result {
-    MemException(_) => PTW_Failure(PTW_Access(), ext_ptw),
+    MemException(_, _) => PTW_Failure(PTW_Access(), ext_ptw),
     MemValue(pte)   => {
       // Extend to 64 bits even on RV32 for simplicity.
       let pte : bits(64) = zero_extend(pte);

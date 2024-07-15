@@ -70,9 +70,9 @@ function phys_mem_read_word_aligned (t : AccessType(ext_access_type), paddr : xl
     None()   => None()
   }) : option(bits(32));
   match (t, result) {
-    (Execute(),  None()) => MemException(E_Fetch_Access_Fault()),
-    (Read(Data), None()) => MemException(E_Load_Access_Fault()),
-    (_,          None()) => MemException(E_SAMO_Access_Fault()),
+    (Execute(),  None()) => MemException(paddr, E_Fetch_Access_Fault()),
+    (Read(Data), None()) => MemException(paddr, E_Load_Access_Fault()),
+    (_,          None()) => MemException(paddr, E_SAMO_Access_Fault()),
     (_,      Some(v)) => { if   get_config_print_mem()
                               then print_mem("mem[" ^ to_str(t) ^ "," ^ BitStr(paddr) ^ "] -> " ^ BitStr(v));
                               MemValue(v) }
@@ -101,24 +101,24 @@ function checked_mem_read forall 'n, 0 < 'n <= max_mem_access . (
   let aligned_next = aligned + zero_extend(0x4);
 
   let res_fst = (match pmpCheck(unsigned(aligned), 4, t, priv) {
-    Some(e) => MemException(e),
+    Some(e) => MemException(paddr, e), // Use misaligned version
     None() => phys_mem_read_word_aligned(t, aligned, aq, rl, res),
   }) : MemoryOpResult(bits(32));
 
   if 4 - unsigned(paddr[1..0]) < width then {
     let res_snd = (match pmpCheck(unsigned(aligned_next), 4, t, priv) {
-      Some(e) => MemException(e),
+      Some(e) => MemException(aligned_next, e),
       None() => phys_mem_read_word_aligned(t, aligned_next, aq, rl, res),
     }) : MemoryOpResult(bits(32));
 
     match (res_fst, res_snd) {
-      (MemException(e), _) => MemException(e),
-      (MemValue(_), MemException(e)) => MemException(e),
+      (MemException(a, e), _) => MemException(a, e),
+      (MemValue(_), MemException(a, e)) => MemException(a, e),
       (MemValue(v1), MemValue(v2)) => MemValue(extract_bits(v2 @ v1, paddr[1..0], width))
     }
   } else
     match res_fst {
-      MemException(e) => MemException(e),
+      MemException(a, e) => MemException(a, e),
       MemValue(v) => MemValue(extract_bits(0x00000000 @ v, paddr[1..0], width))
     }
 }
@@ -136,7 +136,7 @@ function rvfi_read (addr, width, result) = {
                        then { rvfi_mem_data[rvfi_mem_rdata] = sail_zero_extend(v, 256);
                               rvfi_mem_data[rvfi_mem_rmask] = rvfi_encode_width_mask(width) }
                        else { internal_error(__FILE__, __LINE__, "Expected at most 16 bytes here!") },
-    MemException(_) => ()
+    MemException(_, _) => ()
   };
 }
 $else
@@ -151,7 +151,7 @@ val mem_read_priv : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access
 function mem_read_priv (typ, priv, paddr, width, aq, rl, res) = {
   let result : MemoryOpResult(bits(8 * 'n)) =
     if (aq | res) & not(is_aligned_addr(paddr, width))
-    then MemException(E_Load_Addr_Align())
+    then MemException(paddr, E_Load_Addr_Align())
     else match (aq, rl, res) {
       (false, true,  false) => throw(Error_not_implemented("load.rl")),
       (false, true,  true)  => throw(Error_not_implemented("lr.rl")),
@@ -167,7 +167,7 @@ function mem_read (typ, paddr, width, aq, rel, res) =
 val mem_write_ea : forall 'n, 0 < 'n <= max_mem_access . (xlenbits, int('n), bool, bool, bool) -> MemoryOpResult(unit)
 function mem_write_ea (addr, width, aq, rl, con) =
   if (rl | con) & not(is_aligned_addr(addr, width))
-  then MemException(E_SAMO_Addr_Align())
+  then MemException(addr, E_SAMO_Addr_Align())
   else MemValue(write_ram_ea(write_kind_of_flags(aq, rl, con), addr, width))
 
 $ifdef RVFI_DII
@@ -184,7 +184,7 @@ function rvfi_write (addr, width, value, meta, result) = {
       } else {
         internal_error(__FILE__, __LINE__, "Expected at most 16 bytes here!");
       },
-    MemException(_) => ()
+    MemException(_, _) => ()
   }
 }
 $else
@@ -249,19 +249,19 @@ function checked_mem_write forall 'n, 0 < 'n <= max_mem_access . (
   }) : (bits(32), bits(4), bits(32), bits(4));
 
   let res_fst = (match pmpCheck(unsigned(aligned), 4, typ, priv) {
-    Some(e) => MemException(e),
+    Some(e) => MemException(paddr, e), // Use misaligned version
     None() => phys_mem_write_word_aligned(wk, aligned, fst_data, fst_be),
   }) : MemoryOpResult(bool);
 
   if 4 - unsigned(paddr[1..0]) < width then {
     let res_snd = (match pmpCheck(unsigned(aligned_next), 4, typ, priv) {
-      Some(e) => MemException(e),
+      Some(e) => MemException(aligned_next, e),
       None() => phys_mem_write_word_aligned(wk, aligned_next, snd_data, snd_be),
     }) : MemoryOpResult(bool);
 
     match (res_fst, res_snd) {
-      (MemException(e), _) => MemException(e),
-      (MemValue(_), MemException(e)) => MemException(e),
+      (MemException(a, e), _) => MemException(a, e),
+      (MemValue(_), MemException(a, e)) => MemException(a, e),
       (MemValue(_), MemValue(_)) => MemValue(true)
     }
   } else res_fst
@@ -277,7 +277,7 @@ function checked_mem_write forall 'n, 0 < 'n <= max_mem_access . (
 val mem_write_value_priv_meta : forall 'n, 0 < 'n <= max_mem_access . (xlenbits, int('n), bits(8 * 'n), AccessType(ext_access_type), Privilege, mem_meta, bool, bool, bool) -> MemoryOpResult(bool)
 function mem_write_value_priv_meta (paddr, width, value, typ, priv, meta, aq, rl, con) = {
   if (rl | con) & not(is_aligned_addr(paddr, width))
-  then MemException(E_SAMO_Addr_Align())
+  then MemException(paddr, E_SAMO_Addr_Align())
   else {
     let result = checked_mem_write(paddr, width, value, typ, priv, meta, aq, rl, con);
     rvfi_write(paddr, width, value, meta, result);

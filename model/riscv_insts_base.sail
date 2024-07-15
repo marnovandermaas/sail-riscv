@@ -329,15 +329,15 @@ function clause execute(LOAD(imm, rs1, rd, is_unsigned, width, aq, rl)) = {
     Ext_DataAddr_OK(paddr) => match width_bytes {
       1 => match mem_read(Read(Data), paddr, 1, aq, rl, false) {
         MemValue(result) => { X(rd) = extend_value(is_unsigned, result); RETIRE_SUCCESS },
-        MemException(e) => { handle_mem_exception(paddr, e); RETIRE_FAIL },
+        MemException(addr, e) => { handle_mem_exception(addr, e); RETIRE_FAIL },
       },
       2 => match mem_read(Read(Data), paddr, 2, aq, rl, false) {
         MemValue(result) => { X(rd) = extend_value(is_unsigned, result); RETIRE_SUCCESS },
-        MemException(e) => { handle_mem_exception(paddr, e); RETIRE_FAIL },
+        MemException(addr, e) => { handle_mem_exception(addr, e); RETIRE_FAIL },
       },
       4 => match mem_read(Read(Data), paddr, 4, aq, rl, false) {
         MemValue(result) => { X(rd) = extend_value(is_unsigned, result); RETIRE_SUCCESS },
-        MemException(e) => { handle_mem_exception(paddr, e); RETIRE_FAIL },
+        MemException(addr, e) => { handle_mem_exception(addr, e); RETIRE_FAIL },
       }
     }
   }
@@ -388,7 +388,7 @@ function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) = {
       match mem_write_value(paddr, width_bytes, rs2_val[width_bytes * 8 - 1 .. 0], aq, rl, false) {
         MemValue(true)  => RETIRE_SUCCESS,
         MemValue(false) => internal_error(__FILE__, __LINE__, "store got false from mem_write_value"),
-        MemException(e) => { handle_mem_exception(paddr, e); RETIRE_FAIL }
+        MemException(addr, e) => { handle_mem_exception(addr, e); RETIRE_FAIL }
       }
     }
   }
