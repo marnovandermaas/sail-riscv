@@ -138,9 +138,9 @@ mapping clause assembly = C_ADDI16SP(imm)
 union clause ast = C_LUI : (bits(6), regidx)
 
 mapping clause encdec_compressed = C_LUI(imm17 @ imm1612, rd)
-      if rd != zreg & rd != sp & imm17 @ imm1612 != 0b000000
+      if imm17 @ imm1612 != 0b000000
   <-> 0b011 @ imm17 : bits(1) @ rd : regidx @ imm1612 : bits(5) @ 0b01
-      if rd != zreg & rd != sp & imm17 @ imm1612 != 0b000000
+      if imm17 @ imm1612 != 0b000000
 
 function clause execute (C_LUI(imm, rd)) = {
   let res : bits(20) = sign_extend(imm);
