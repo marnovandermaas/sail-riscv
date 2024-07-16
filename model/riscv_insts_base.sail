@@ -398,114 +398,6 @@ mapping clause assembly = STORE(imm, rs2, rs1, size, aq, rl)
   <-> "s" ^ size_mnemonic(size) ^ maybe_aq(aq) ^ maybe_rl(rl) ^ spc() ^ reg_name(rs2) ^ sep() ^ hex_bits_signed_12(imm) ^ opt_spc() ^ "(" ^ opt_spc() ^ reg_name(rs1) ^ opt_spc() ^ ")"
 
 /* ****************************************************************** */
-union clause ast = ADDIW : (bits(12), regidx, regidx)
-
-mapping clause encdec = ADDIW(imm, rs1, rd)
-      if sizeof(xlen) == 64
-  <-> imm @ rs1 @ 0b000 @ rd @ 0b0011011
-      if sizeof(xlen) == 64
-
-function clause execute (ADDIW(imm, rs1, rd)) = {
-  let result : xlenbits = sign_extend(imm) + X(rs1);
-  X(rd) = sign_extend(result[31..0]);
-  RETIRE_SUCCESS
-}
-
-mapping clause assembly = ADDIW(imm, rs1, rd)
-      if sizeof(xlen) == 64
-  <-> "addiw" ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_signed_12(imm)
-      if sizeof(xlen) == 64
-
-/* ****************************************************************** */
-union clause ast = RTYPEW : (regidx, regidx, regidx, ropw)
-
-mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_ADDW)
-      if sizeof(xlen) == 64
-  <-> 0b0000000 @ rs2 @ rs1 @ 0b000 @ rd @ 0b0111011
-      if sizeof(xlen) == 64
-mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SUBW)
-      if sizeof(xlen) == 64
-  <-> 0b0100000 @ rs2 @ rs1 @ 0b000 @ rd @ 0b0111011
-      if sizeof(xlen) == 64
-mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SLLW)
-      if sizeof(xlen) == 64
-  <-> 0b0000000 @ rs2 @ rs1 @ 0b001 @ rd @ 0b0111011
-      if sizeof(xlen) == 64
-mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SRLW)
-      if sizeof(xlen) == 64
-  <-> 0b0000000 @ rs2 @ rs1 @ 0b101 @ rd @ 0b0111011
-      if sizeof(xlen) == 64
-mapping clause encdec = RTYPEW(rs2, rs1, rd, RISCV_SRAW)
-      if sizeof(xlen) == 64
-  <-> 0b0100000 @ rs2 @ rs1 @ 0b101 @ rd @ 0b0111011
-      if sizeof(xlen) == 64
-
-function clause execute (RTYPEW(rs2, rs1, rd, op)) = {
-  let rs1_val = (X(rs1))[31..0];
-  let rs2_val = (X(rs2))[31..0];
-  let result : bits(32) = match op {
-    RISCV_ADDW => rs1_val + rs2_val,
-    RISCV_SUBW => rs1_val - rs2_val,
-    RISCV_SLLW => rs1_val << (rs2_val[4..0]),
-    RISCV_SRLW => rs1_val >> (rs2_val[4..0]),
-    RISCV_SRAW => shift_right_arith32(rs1_val, rs2_val[4..0])
-  };
-  X(rd) = sign_extend(result);
-  RETIRE_SUCCESS
-}
-
-mapping rtypew_mnemonic : ropw <-> string = {
-  RISCV_ADDW <-> "addw",
-  RISCV_SUBW <-> "subw",
-  RISCV_SLLW <-> "sllw",
-  RISCV_SRLW <-> "srlw",
-  RISCV_SRAW <-> "sraw"
-}
-
-mapping clause assembly = RTYPEW(rs2, rs1, rd, op)
-      if sizeof(xlen) == 64
-  <-> rtypew_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
-      if sizeof(xlen) == 64
-
-/* ****************************************************************** */
-union clause ast = SHIFTIWOP : (bits(5), regidx, regidx, sopw)
-
-mapping clause encdec = SHIFTIWOP(shamt, rs1, rd, RISCV_SLLIW)
-      if sizeof(xlen) == 64
-  <-> 0b0000000 @ shamt @ rs1 @ 0b001 @ rd @ 0b0011011
-      if sizeof(xlen) == 64
-mapping clause encdec = SHIFTIWOP(shamt, rs1, rd, RISCV_SRLIW)
-      if sizeof(xlen) == 64
-  <-> 0b0000000 @ shamt @ rs1 @ 0b101 @ rd @ 0b0011011
-      if sizeof(xlen) == 64
-mapping clause encdec = SHIFTIWOP(shamt, rs1, rd, RISCV_SRAIW)
-      if sizeof(xlen) == 64
-  <-> 0b0100000 @ shamt @ rs1 @ 0b101 @ rd @ 0b0011011
-      if sizeof(xlen) == 64
-
-function clause execute (SHIFTIWOP(shamt, rs1, rd, op)) = {
-  let rs1_val = (X(rs1))[31..0];
-  let result : bits(32) = match op {
-    RISCV_SLLIW => rs1_val << shamt,
-    RISCV_SRLIW => rs1_val >> shamt,
-    RISCV_SRAIW => shift_right_arith32(rs1_val, shamt)
-  };
-  X(rd) = sign_extend(result);
-  RETIRE_SUCCESS
-}
-
-mapping shiftiwop_mnemonic : sopw <-> string = {
-  RISCV_SLLIW <-> "slliw",
-  RISCV_SRLIW <-> "srliw",
-  RISCV_SRAIW <-> "sraiw"
-}
-
-mapping clause assembly = SHIFTIWOP(shamt, rs1, rd, op)
-      if sizeof(xlen) == 64
-  <-> shiftiwop_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_5(shamt)
-      if sizeof(xlen) == 64
-
-/* ****************************************************************** */
 union clause ast = FENCE : (bits(4), bits(4))
 
 mapping clause encdec = FENCE(pred, succ)
@@ -572,26 +464,6 @@ mapping clause assembly = FENCE(pred, succ)
   <-> "fence" ^ spc() ^ fence_bits(pred) ^ sep() ^ fence_bits(succ)
 
 /* ****************************************************************** */
-union clause ast = FENCE_TSO : (bits(4), bits(4))
-
-mapping clause encdec = FENCE_TSO(pred, succ)
-  <-> 0b1000 @ pred @ succ @ 0b00000 @ 0b000 @ 0b00000 @ 0b0001111
-
-function clause execute (FENCE_TSO(pred, succ)) = {
-  match (pred, succ) {
-    (_ : bits(2) @ 0b11, _ : bits(2) @ 0b11) => sail_barrier(Barrier_RISCV_tso),
-    (_ : bits(2) @ 0b00, _ : bits(2) @ 0b00) => (),
-
-    _ => { print("FIXME: unsupported fence");
-           () }
-  };
-  RETIRE_SUCCESS
-}
-
-mapping clause assembly = FENCE_TSO(pred, succ)
-  <-> "fence.tso" ^ spc() ^ fence_bits(pred) ^ sep() ^ fence_bits(succ)
-
-/* ****************************************************************** */
 union clause ast = FENCEI : unit
 
 mapping clause encdec = FENCEI()
@@ -643,30 +515,6 @@ function clause execute MRET() = {
 mapping clause assembly = MRET() <-> "mret"
 
 /* ****************************************************************** */
-union clause ast = SRET : unit
-
-mapping clause encdec = SRET()
-  <-> 0b0001000 @ 0b00010 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
-
-function clause execute SRET() = {
-  let sret_illegal : bool = match cur_privilege {
-    User       => true,
-    Supervisor => not(haveSupMode ()) | mstatus[TSR] == 0b1,
-    Machine    => not(haveSupMode ())
-  };
-  if   sret_illegal
-  then { handle_illegal(); RETIRE_FAIL }
-  else if not(ext_check_xret_priv (Supervisor))
-  then { ext_fail_xret_priv(); RETIRE_FAIL }
-  else {
-    set_next_pc(exception_handler(cur_privilege, CTL_SRET(), PC));
-    RETIRE_SUCCESS
-  }
-}
-
-mapping clause assembly = SRET() <-> "sret"
-
-/* ****************************************************************** */
 union clause ast = EBREAK : unit
 
 mapping clause encdec = EBREAK()
@@ -695,26 +543,3 @@ function clause execute WFI() =
   }
 
 mapping clause assembly = WFI() <-> "wfi"
-
-/* ****************************************************************** */
-union clause ast = SFENCE_VMA : (regidx, regidx)
-
-mapping clause encdec = SFENCE_VMA(rs1, rs2)
-  <-> 0b0001001 @ rs2 @ rs1 @ 0b000 @ 0b00000 @ 0b1110011
-
-function clause execute SFENCE_VMA(rs1, rs2) = {
-  let addr : option(xlenbits) = if rs1 == 0b00000 then None() else Some(X(rs1));
-  let asid : option(xlenbits) = if rs2 == 0b00000 then None() else Some(X(rs2));
-  match cur_privilege {
-    User       => { handle_illegal(); RETIRE_FAIL },
-    Supervisor => match (architecture(get_mstatus_SXL(mstatus)), mstatus[TVM]) {
-                    (Some(_), 0b1)  => { handle_illegal(); RETIRE_FAIL },
-                    (Some(_), 0b0) => { /* flush_TLB(asid, addr); */ RETIRE_SUCCESS },
-                    (_, _)           => internal_error(__FILE__, __LINE__, "unimplemented sfence architecture")
-                  },
-    Machine    => { /* flush_TLB(asid, addr); */ RETIRE_SUCCESS }
-  }
-}
-
-mapping clause assembly = SFENCE_VMA(rs1, rs2)
-  <-> "sfence.vma" ^ spc() ^ reg_name(rs1) ^ sep() ^ reg_name(rs2)
