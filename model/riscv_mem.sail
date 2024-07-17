@@ -144,8 +144,9 @@ val rvfi_read : forall 'n, 'n > 0. (xlenbits, int('n), MemoryOpResult((bits(8 * 
 function rvfi_read (addr, width, result) = ()
 $endif
 
-val mem_read      : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), xlenbits, int('n), bool, bool, bool)       -> MemoryOpResult(bits(8 * 'n))
-val mem_read_priv : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), Privilege, xlenbits, int('n), bool, bool, bool)       -> MemoryOpResult(bits(8 * 'n))
+val mem_read      : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), xlenbits, int('n), bool, bool, bool) -> MemoryOpResult(bits(8 * 'n))
+val mem_read_priv : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), Privilege, xlenbits, int('n), bool, bool, bool) -> MemoryOpResult(bits(8 * 'n))
+val mem_read_i      : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), xlenbits, int('n)) -> MemoryOpResult(unit)
 
 /* The most generic memory read operation */
 function mem_read_priv (typ, priv, paddr, width, aq, rl, res) = {
@@ -163,6 +164,35 @@ function mem_read_priv (typ, priv, paddr, width, aq, rl, res) = {
 /* Specialized mem_read_priv that operates at the default effective privilege */
 function mem_read (typ, paddr, width, aq, rel, res) =
   mem_read_priv(typ, effectivePrivilege(typ, mstatus, cur_privilege), paddr, width, aq, rel, res)
+
+function mem_read_i (t, paddr, width) = {
+  let priv = effectivePrivilege(t, mstatus, cur_privilege);
+
+  let aligned = [paddr with 1..0 = 0b00];
+  let aligned_next = aligned + zero_extend(0x4);
+
+  let res_fst = (match pmpCheck(unsigned(aligned), 4, t, priv) {
+    Some(e) => MemException(paddr, e),
+    None() => MemValue(()),
+  }) : MemoryOpResult(unit);
+
+  if 4 - unsigned(paddr[1..0]) < width then {
+    let res_snd = (match pmpCheck(unsigned(aligned_next), 4, t, priv) {
+      Some(e) => MemException(aligned_next, e),
+      None() => MemValue(()),
+    }) : MemoryOpResult(unit);
+
+    match (res_fst, res_snd) {
+      (MemException(a, e), _) => MemException(a, e),
+      (MemValue(_), MemException(a, e)) => MemException(a, e),
+      (MemValue(_), MemValue(_)) => MemValue(())
+    }
+  } else
+    match res_fst {
+      MemException(a, e) => MemException(a, e),
+      MemValue(v) => MemValue(())
+    }
+}
 
 val mem_write_ea : forall 'n, 0 < 'n <= max_mem_access . (xlenbits, int('n), bool, bool, bool) -> MemoryOpResult(unit)
 function mem_write_ea (addr, width, aq, rl, con) =
