@@ -371,7 +371,7 @@ function legalize_mip(o : Minterrupts, v : xlenbits) -> Minterrupts = {
   /* The only writable bits are the S-mode bits, and with the 'N'
    * extension, the U-mode bits. */
   let v = Mk_Minterrupts(v);
-  let m = [o with SEI = v[SEI], STI = v[STI], SSI = v[SSI]];
+  let m = o;
   if haveUsrMode() & haveNExt() then {
     [m with UEI = v[UEI], UTI = v[UTI], USI = v[USI]]
   } else m
@@ -382,10 +382,7 @@ function legalize_mie(o : Minterrupts, v : xlenbits) -> Minterrupts = {
   let m = [o with
     MEI = v[MEI],
     MTI = v[MTI],
-    MSI = v[MSI],
-    SEI = v[SEI],
-    STI = v[STI],
-    SSI = v[SSI]
+    MSI = v[MSI]
   ];
   /* The U-mode bits will be modified if we have the 'N' extension. */
   if haveUsrMode() & haveNExt() then {

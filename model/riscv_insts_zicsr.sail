@@ -113,6 +113,9 @@ function writeCSR (csr : csreg, value : xlenbits) -> unit = {
     (0x3D @ idx : bits(4),  _) => { let idx = unsigned(0b10 @ idx); pmpWriteAddrReg(idx, value); Some(pmpReadAddrReg(idx)) },
     (0x3E @ idx : bits(4),  _) => { let idx = unsigned(0b11 @ idx); pmpWriteAddrReg(idx, value); Some(pmpReadAddrReg(idx)) },
 
+    (0x747,  _) => { mseccfg = mseccfgWrite(mseccfg, value); Some(mseccfg.bits()) },
+    (0x757, 32) => { Some(mseccfgh) }, // ignore writes for now
+
     /* machine mode counters */
     (0xB00,  _) => { mcycle[(sizeof(xlen) - 1) .. 0] = value; Some(value) },
     (0xB02,  _) => { minstret[(sizeof(xlen) - 1) .. 0] = value; minstret_increment = false; Some(value) },
