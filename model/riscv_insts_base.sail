@@ -398,10 +398,10 @@ mapping clause assembly = STORE(imm, rs2, rs1, size, aq, rl)
   <-> "s" ^ size_mnemonic(size) ^ maybe_aq(aq) ^ maybe_rl(rl) ^ spc() ^ reg_name(rs2) ^ sep() ^ hex_bits_signed_12(imm) ^ opt_spc() ^ "(" ^ opt_spc() ^ reg_name(rs1) ^ opt_spc() ^ ")"
 
 /* ****************************************************************** */
-union clause ast = FENCE : (bits(4), bits(4))
+union clause ast = FENCE : (bits(4), bits(4), bits(4), bits(5), bits(5))
 
-mapping clause encdec = FENCE(pred, succ)
-  <-> 0b0000 @ pred @ succ @ 0b00000 @ 0b000 @ 0b00000 @ 0b0001111
+mapping clause encdec = FENCE(pred, succ, g1, g2, g3)
+  <-> g1 @ pred @ succ @ g2 @ 0b000 @ g3 @ 0b0001111
 
 function effective_fence_set(set : bits(4), fiom : bool) -> bits(4) = {
   // The bits are IORW. If FIOM is set then I implies R and O implies W.
@@ -410,7 +410,7 @@ function effective_fence_set(set : bits(4), fiom : bool) -> bits(4) = {
   } else set
 }
 
-function clause execute (FENCE(pred, succ)) = {
+function clause execute (FENCE(pred, succ, g1, g2, g3)) = {
   // If the FIOM bit in menvcfg/senvcfg is set then the I/O bits can imply R/W.
   let fiom = is_fiom_active();
   let pred = effective_fence_set(pred, fiom);
@@ -460,19 +460,14 @@ mapping fence_bits : bits(4) <-> string = {
   i : bits(1) @ o : bits(1) @ r : bits(1) @ w : bits(1) <-> bit_maybe_i(i) ^ bit_maybe_o(o) ^ bit_maybe_r(r) ^ bit_maybe_w(w)
 }
 
-mapping clause assembly = FENCE(pred, succ)
-  <-> "fence" ^ spc() ^ fence_bits(pred) ^ sep() ^ fence_bits(succ)
-
 /* ****************************************************************** */
-union clause ast = FENCEI : unit
+union clause ast = FENCEI : (bits(12), bits(5), bits(5))
 
-mapping clause encdec = FENCEI()
-  <-> 0b000000000000 @ 0b00000 @ 0b001 @ 0b00000 @ 0b0001111
+mapping clause encdec = FENCEI(g1, g2, g3)
+  <-> g1 @ g2 @ 0b001 @ g3 @ 0b0001111
 
 /* fence.i is a nop for the memory model */
-function clause execute FENCEI() = { /* __barrier(Barrier_RISCV_i); */ RETIRE_SUCCESS }
-
-mapping clause assembly = FENCEI() <-> "fence.i"
+function clause execute FENCEI(g1, g2, g3) = { /* __barrier(Barrier_RISCV_i); */ RETIRE_SUCCESS }
 
 /* ****************************************************************** */
 union clause ast = ECALL : unit
