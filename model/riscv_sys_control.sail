@@ -208,25 +208,11 @@ function dispatchInterrupt(priv : Privilege) -> option((InterruptType, Privilege
   /* If we don't have different privilege levels, we don't need to check delegation.
    * Absence of U-mode implies absence of S-mode.
    */
-  if not(haveUsrMode()) | (not(haveSupMode()) & not(haveNExt())) then {
-    assert(priv == Machine, "invalid current privilege");
-    if mstatus[MIE] == 0b1 then {
-      let enabled_pending = mip.bits & mie.bits;
-      match findPendingInterrupt(enabled_pending) {
-        Some(i) => let r = (i, Machine) in Some(r),
-        None()  => None()
-      }
-    } else {
-      None()
-    }
-  } else {
-    match getPendingSet(priv) {
-      None()      => None(),
-      Some(ip, p) => match findPendingInterrupt(ip) {
-                       None()  => None(),
-                       Some(i) => let r = (i, p) in Some(r)
-                     }
-    }
+  assert(priv == Machine, "invalid current privilege");
+  let enabled_pending = mip.bits & mie.bits;
+  match findPendingInterrupt(enabled_pending) {
+    Some(i) => let r = (i, Machine) in Some(r),
+    None()  => None()
   }
 }
 
@@ -234,9 +220,7 @@ function dispatchInterrupt(priv : Privilege) -> option((InterruptType, Privilege
 
 union ctl_result = {
   CTL_TRAP : sync_exception,
-  CTL_SRET : unit,
-  CTL_MRET : unit,
-  CTL_URET : unit
+  CTL_MRET : unit
 }
 
 /* trap value */
@@ -290,51 +274,8 @@ function trap_handler(del_priv : Privilege, intr : bool, c : exc_code, pc : xlen
 
        prepare_trap_vector(del_priv, mcause)
     },
-    Supervisor => {
-       assert (haveSupMode(), "no supervisor mode present for delegation");
-
-       scause[IsInterrupt] = bool_to_bits(intr);
-       scause[Cause]       = zero_extend(c);
-
-       mstatus[SPIE] = mstatus[SIE];
-       mstatus[SIE]  = 0b0;
-       mstatus[SPP]  = match cur_privilege {
-                           User => 0b0,
-                           Supervisor => 0b1,
-                           Machine => internal_error(__FILE__, __LINE__, "invalid privilege for s-mode trap")
-                         };
-       stval           = tval(info);
-       sepc            = pc;
-
-       cur_privilege   = del_priv;
-
-       handle_trap_extension(del_priv, pc, ext);
-
-       if   get_config_print_reg()
-       then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits));
-
-       prepare_trap_vector(del_priv, scause)
-    },
-    User => {
-       assert(haveUsrMode(), "no user mode present for delegation");
-
-       ucause[IsInterrupt] = bool_to_bits(intr);
-       ucause[Cause]       = zero_extend(c);
-
-       mstatus[UPIE] = mstatus[UIE];
-       mstatus[UIE]  = 0b0;
-       utval           = tval(info);
-       uepc            = pc;
-
-       cur_privilege   = del_priv;
-
-       handle_trap_extension(del_priv, pc, ext);
-
-       if   get_config_print_reg()
-       then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits));
-
-       prepare_trap_vector(del_priv, ucause)
-    }
+    Supervisor => internal_error(__FILE__, __LINE__, "invalid priv"),
+    User => internal_error(__FILE__, __LINE__, "invalid priv")
   };
 }
 
@@ -364,38 +305,6 @@ function exception_handler(cur_priv : Privilege, ctl : ctl_result,
 
       cancel_reservation();
       prepare_xret_target(Machine) & pc_alignment_mask()
-    },
-    (_, CTL_SRET())  => {
-      let prev_priv   = cur_privilege;
-      mstatus[SIE]  = mstatus[SPIE];
-      mstatus[SPIE] = 0b1;
-      cur_privilege   = if mstatus[SPP] == 0b1 then Supervisor else User;
-      mstatus[SPP]  = 0b0;
-      if   cur_privilege != Machine
-      then mstatus[MPRV] = 0b0;
-
-      if   get_config_print_reg()
-      then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits));
-      if   get_config_print_platform()
-      then print_platform("ret-ing from " ^ to_str(prev_priv)
-                          ^ " to " ^ to_str(cur_privilege));
-
-      cancel_reservation();
-      prepare_xret_target(Supervisor) & pc_alignment_mask()
-    },
-    (_, CTL_URET())  => {
-      let prev_priv   = cur_privilege;
-      mstatus[UIE]  = mstatus[UPIE];
-      mstatus[UPIE] = 0b1;
-      cur_privilege   = User;
-
-      if   get_config_print_reg()
-      then print_reg("CSR mstatus <- " ^ BitStr(mstatus.bits));
-      if   get_config_print_platform()
-      then print_platform("ret-ing from " ^ to_str(prev_priv) ^ " to " ^ to_str(cur_privilege));
-
-      cancel_reservation();
-      prepare_xret_target(User) & pc_alignment_mask()
     }
   }
 }
