@@ -20,11 +20,13 @@ mapping clause assembly = ILLEGAL(s) <-> "illegal" ^ spc() ^ hex_bits_32(s)
 
 mapping clause encdec_compressed = C_ILLEGAL(s) <-> s
 
-function clause execute C_ILLEGAL(s) = { handle_illegal(); RETIRE_FAIL }
+function clause decompress C_ILLEGAL(s) = { handle_illegal(); None() }
 
 mapping clause assembly = C_ILLEGAL(s) <-> "c.illegal" ^ spc() ^ hex_bits_16(s)
 
 /* ****************************************************************** */
+
+function clause decompress instr = Some(instr)
 
 /* End definitions */
 end ast
