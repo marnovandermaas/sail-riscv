@@ -171,27 +171,16 @@ function mem_read_i (t, paddr, width) = {
   let aligned = [paddr with 1..0 = 0b00];
   let aligned_next = aligned + zero_extend(0x4);
 
-  let res_fst = (match pmpCheck(unsigned(aligned), 4, t, priv) {
+  match pmpCheck(unsigned(aligned), 4, t, priv) {
     Some(e) => MemException(paddr, e),
-    None() => MemValue(()),
-  }) : MemoryOpResult(unit);
-
-  if 4 - unsigned(paddr[1..0]) < width then {
-    let res_snd = (match pmpCheck(unsigned(aligned_next), 4, t, priv) {
-      Some(e) => MemException(aligned_next, e),
-      None() => MemValue(()),
-    }) : MemoryOpResult(unit);
-
-    match (res_fst, res_snd) {
-      (MemException(a, e), _) => MemException(a, e),
-      (MemValue(_), MemException(a, e)) => MemException(a, e),
-      (MemValue(_), MemValue(_)) => MemValue(())
-    }
-  } else
-    match res_fst {
-      MemException(a, e) => MemException(a, e),
-      MemValue(v) => MemValue(())
-    }
+    None() =>
+      if (width == 2) | (paddr[1..0] == 0b00)
+      then MemValue(())
+      else match pmpCheck(unsigned(aligned_next), 4, t, priv) {
+        Some(e) => MemException(paddr + zero_extend(0x2), e),
+        None() => MemValue(()),
+      }
+  }
 }
 
 val mem_write_ea : forall 'n, 0 < 'n <= max_mem_access . (xlenbits, int('n), bool, bool, bool) -> MemoryOpResult(unit)
