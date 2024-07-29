@@ -531,10 +531,9 @@ mapping clause encdec = WFI()
 function clause execute WFI() =
   match cur_privilege {
     Machine    => { platform_wfi(); RETIRE_SUCCESS },
-    Supervisor => if   mstatus[TW] == 0b1
+    User => if   mstatus[TW] == 0b1
                   then { handle_illegal(); RETIRE_FAIL }
                   else { platform_wfi(); RETIRE_SUCCESS },
-    User       => { handle_illegal(); RETIRE_FAIL }
   }
 
 mapping clause assembly = WFI() <-> "wfi"
