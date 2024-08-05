@@ -88,7 +88,7 @@ instantiation sail_mem_write with
    4096 was chosen because it is a page size, and a reasonable maximum
    for cbo.zero.
    */
-type max_mem_access : Int = 4
+type max_mem_access : Int = 8
 
 type bebits = bits(4)
 

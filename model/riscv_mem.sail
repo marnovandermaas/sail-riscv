@@ -80,11 +80,15 @@ function phys_mem_read_word_aligned (t : AccessType(ext_access_type), paddr : xl
 }
 
 function extract_bits forall 'n, 0 < 'n <= max_mem_access . (value : bits(64), addroff: bits(2), width: int('n)) -> bits(8 * 'n) =
-  match addroff {
-    0b00 => value[width*8 - 1..0],
-    0b01 => value[width*8 - 1 + 8..8],
-    0b10 => value[width*8 - 1 + 16..16],
-    0b11 => value[width*8 - 1 + 24..24],
+  if width == 8 then value
+  else {
+    assert(width <= 4);
+    match addroff {
+      0b00 => value[width*8 - 1..0],
+      0b01 => value[width*8 - 1 + 8..8],
+      0b10 => value[width*8 - 1 + 16..16],
+      0b11 => value[width*8 - 1 + 24..24],
+    }
   }
 
 /* Does either 1 or 2 memory accesses based on alignment and width */
@@ -96,9 +100,11 @@ function checked_mem_read forall 'n, 0 < 'n <= max_mem_access . (
   aq : bool,
   rl : bool,
   res: bool
-) -> MemoryOpResult(bits(8 * 'n)) = {
+) -> MemoryOpResult((bits(8 * 'n), mem_meta)) = {
   let aligned = [paddr with 1..0 = 0b00];
   let aligned_next = aligned + zero_extend(0x4);
+
+  let meta = __ReadRAM_Meta(aligned, width);
 
   let res_fst = (match pmpCheck(unsigned(aligned), 4, t, priv) {
     Some(e) => MemException(paddr, e), // Use misaligned version
@@ -114,12 +120,12 @@ function checked_mem_read forall 'n, 0 < 'n <= max_mem_access . (
     match (res_fst, res_snd) {
       (MemException(a, e), _) => MemException(a, e),
       (MemValue(_), MemException(a, e)) => MemException(a, e),
-      (MemValue(v1), MemValue(v2)) => MemValue(extract_bits(v2 @ v1, paddr[1..0], width))
+      (MemValue(v1), MemValue(v2)) => MemValue((extract_bits(v2 @ v1, paddr[1..0], width), meta))
     }
   } else
     match res_fst {
       MemException(a, e) => MemException(a, e),
-      MemValue(v) => MemValue(extract_bits(0x00000000 @ v, paddr[1..0], width))
+      MemValue(v) => MemValue((extract_bits(0x00000000 @ v, paddr[1..0], width), meta))
     }
 }
 
@@ -145,12 +151,13 @@ function rvfi_read (addr, width, result) = ()
 $endif
 
 val mem_read      : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), xlenbits, int('n), bool, bool, bool) -> MemoryOpResult(bits(8 * 'n))
-val mem_read_priv : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), Privilege, xlenbits, int('n), bool, bool, bool) -> MemoryOpResult(bits(8 * 'n))
+val mem_read_meta : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), xlenbits, int('n), bool, bool, bool) -> MemoryOpResult((bits(8 * 'n), mem_meta))
+val mem_read_priv_meta : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), Privilege, xlenbits, int('n), bool, bool, bool) -> MemoryOpResult((bits(8 * 'n), mem_meta))
 val mem_read_i      : forall 'n, 0 < 'n <= max_mem_access . (AccessType(ext_access_type), xlenbits, int('n)) -> MemoryOpResult(unit)
 
 /* The most generic memory read operation */
-function mem_read_priv (typ, priv, paddr, width, aq, rl, res) = {
-  let result : MemoryOpResult(bits(8 * 'n)) =
+function mem_read_priv_meta (typ, priv, paddr, width, aq, rl, res) = {
+  let result : MemoryOpResult((bits(8 * 'n), mem_meta)) =
     if (aq | res) & not(is_aligned_addr(paddr, width))
     then MemException(paddr, E_Load_Addr_Align())
     else match (aq, rl, res) {
@@ -163,7 +170,13 @@ function mem_read_priv (typ, priv, paddr, width, aq, rl, res) = {
 
 /* Specialized mem_read_priv that operates at the default effective privilege */
 function mem_read (typ, paddr, width, aq, rel, res) =
-  mem_read_priv(typ, effectivePrivilege(typ, mstatus, cur_privilege), paddr, width, aq, rel, res)
+  match mem_read_priv_meta(typ, effectivePrivilege(typ, mstatus, cur_privilege), paddr, width, aq, rel, res) {
+    MemValue(v, _) => MemValue(v),
+    MemException(a, b) => MemException(a, b)
+  }
+
+function mem_read_meta (typ, paddr, width, aq, rel, res) =
+  mem_read_priv_meta(typ, effectivePrivilege(typ, mstatus, cur_privilege), paddr, width, aq, rel, res)
 
 function mem_read_i (t, paddr, width) = {
   let priv = effectivePrivilege(t, mstatus, cur_privilege);
