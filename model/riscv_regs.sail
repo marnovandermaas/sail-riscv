@@ -104,44 +104,48 @@ function wX_bits(i: bits(5), data: xlenbits) -> unit = {
   wX(unsigned(i)) = data
 }
 
-overload X = {rX_bits, wX_bits, rX, wX}
+function rX_idx(r: regidx) -> xlenbits = rX_bits(r.idx)
+
+function wX_idx(r: regidx, v: xlenbits) -> unit = wX_bits(r.idx, v)
+
+overload X = {rX_bits, wX_bits, rX_idx, wX_idx, rX, wX}
 
 /* mappings for assembly */
 
-val reg_name : bits(5) <-> string
+val reg_name : regidx <-> string
 mapping reg_name = {
-    0b00000 <-> "zero",
-    0b00001 <-> "ra",
-    0b00010 <-> "sp",
-    0b00011 <-> "gp",
-    0b00100 <-> "tp",
-    0b00101 <-> "t0",
-    0b00110 <-> "t1",
-    0b00111 <-> "t2",
-    0b01000 <-> "fp",
-    0b01001 <-> "s1",
-    0b01010 <-> "a0",
-    0b01011 <-> "a1",
-    0b01100 <-> "a2",
-    0b01101 <-> "a3",
-    0b01110 <-> "a4",
-    0b01111 <-> "a5",
-    0b10000 <-> "a6",
-    0b10001 <-> "a7",
-    0b10010 <-> "s2",
-    0b10011 <-> "s3",
-    0b10100 <-> "s4",
-    0b10101 <-> "s5",
-    0b10110 <-> "s6",
-    0b10111 <-> "s7",
-    0b11000 <-> "s8",
-    0b11001 <-> "s9",
-    0b11010 <-> "s10",
-    0b11011 <-> "s11",
-    0b11100 <-> "t3",
-    0b11101 <-> "t4",
-    0b11110 <-> "t5",
-    0b11111 <-> "t6"
+    struct { idx = 0b00000 } <-> "zero",
+    struct { idx = 0b00001 } <-> "ra",
+    struct { idx = 0b00010 } <-> "sp",
+    struct { idx = 0b00011 } <-> "gp",
+    struct { idx = 0b00100 } <-> "tp",
+    struct { idx = 0b00101 } <-> "t0",
+    struct { idx = 0b00110 } <-> "t1",
+    struct { idx = 0b00111 } <-> "t2",
+    struct { idx = 0b01000 } <-> "fp",
+    struct { idx = 0b01001 } <-> "s1",
+    struct { idx = 0b01010 } <-> "a0",
+    struct { idx = 0b01011 } <-> "a1",
+    struct { idx = 0b01100 } <-> "a2",
+    struct { idx = 0b01101 } <-> "a3",
+    struct { idx = 0b01110 } <-> "a4",
+    struct { idx = 0b01111 } <-> "a5",
+    struct { idx = 0b10000 } <-> "a6",
+    struct { idx = 0b10001 } <-> "a7",
+    struct { idx = 0b10010 } <-> "s2",
+    struct { idx = 0b10011 } <-> "s3",
+    struct { idx = 0b10100 } <-> "s4",
+    struct { idx = 0b10101 } <-> "s5",
+    struct { idx = 0b10110 } <-> "s6",
+    struct { idx = 0b10111 } <-> "s7",
+    struct { idx = 0b11000 } <-> "s8",
+    struct { idx = 0b11001 } <-> "s9",
+    struct { idx = 0b11010 } <-> "s10",
+    struct { idx = 0b11011 } <-> "s11",
+    struct { idx = 0b11100 } <-> "t3",
+    struct { idx = 0b11101 } <-> "t4",
+    struct { idx = 0b11110 } <-> "t5",
+    struct { idx = 0b11111 } <-> "t6"
 }
 
 mapping creg_name : bits(3) <-> string = {

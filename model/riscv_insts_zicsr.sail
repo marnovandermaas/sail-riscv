@@ -10,7 +10,7 @@
 /* This file specifies the instructions in the 'Zicsr' extension.     */
 
 /* ****************************************************************** */
-union clause ast = CSR  : (csreg, regidx, regidx, bool, csrop)
+union clause ast = CSR  : (csreg, bits(5), regidx, bool, csrop)
 
 mapping encdec_csrop : csrop <-> bits(2) = {
   CSRRW <-> 0b01,
@@ -19,7 +19,7 @@ mapping encdec_csrop : csrop <-> bits(2) = {
 }
 
 mapping clause encdec = CSR(csr, rs1, rd, is_imm, op)
-  <-> csr @ rs1 @ bool_bits(is_imm) @ encdec_csrop(op) @ rd @ 0b1110011
+  <-> csr @ rs1 @ bool_bits(is_imm) @ encdec_csrop(op) @ encdec_r(rd) @ 0b1110011
 
 function readCSR csr : csreg -> xlenbits = {
   let res : xlenbits =
@@ -136,14 +136,16 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) = {
     CSRRW  => true,
     _      => unsigned(rs1) != 0
   };
-  if not(check_CSR(csr, cur_privilege, isWrite))
+  if isWrite & is_imm & haveE() & rs1[4] == bitone
+  then { handle_illegal(); RETIRE_FAIL }
+  else if not(check_CSR(csr, cur_privilege, isWrite))
   then { handle_illegal(); RETIRE_FAIL }
   else if not(ext_check_CSR(csr, cur_privilege, isWrite))
   then { ext_check_CSR_fail(); RETIRE_FAIL }
   else {
     let csr_val = readCSR(csr); /* could have side-effects, so technically shouldn't perform for CSRW[I] with rd == 0 */
     if isWrite then {
-      let rs1_val : xlenbits = if is_imm then zero_extend(rs1) else X(rs1);
+      let rs1_val : xlenbits = if is_imm then zero_extend(rs1) else X(struct { idx = rs1 });
       let new_val : xlenbits = match op {
         CSRRW => rs1_val,
         CSRRS => csr_val | rs1_val,
@@ -170,4 +172,4 @@ mapping csr_mnemonic : csrop <-> string = {
 mapping clause assembly = CSR(csr, rs1, rd, true, op)
   <-> csr_mnemonic(op) ^ "i" ^ spc() ^ reg_name(rd)  ^ sep() ^ csr_name_map(csr) ^ sep() ^ hex_bits_5(rs1)
 mapping clause assembly = CSR(csr, rs1, rd, false, op)
-  <-> csr_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ csr_name_map(csr) ^ sep() ^ reg_name(rs1)
+  <-> csr_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ csr_name_map(csr) ^ sep() ^ reg_name(struct { idx = rs1 })

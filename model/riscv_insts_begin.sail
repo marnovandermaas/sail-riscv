@@ -13,6 +13,12 @@
 
 scattered union ast
 
+val encdec_r : regidx <-> bits(5)
+function encdec_r_backwards(bits) = struct { idx = bits }
+function encdec_r_backwards_matches(bits) = not(haveE()) | (bits[4] == bitzero)
+function encdec_r_forwards(ri) = ri.idx
+function encdec_r_forwards_matches(bits) = true
+
 /* returns whether an instruction was retired, used for computing minstret */
 val execute : ast -> Retired
 scattered function execute

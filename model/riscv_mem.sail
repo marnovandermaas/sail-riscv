@@ -104,7 +104,7 @@ function checked_mem_read forall 'n, 0 < 'n <= max_mem_access . (
   let aligned = [paddr with 1..0 = 0b00];
   let aligned_next = aligned + zero_extend(0x4);
 
-  let meta = __ReadRAM_Meta(aligned, width);
+  let meta = __ReadRAM_Meta(paddr, width);
 
   let res_fst = (match pmpCheck(unsigned(aligned), 4, t, priv) {
     Some(e) => MemException(paddr, e), // Use misaligned version
@@ -270,6 +270,8 @@ function checked_mem_write forall 'n, 0 < 'n <= max_mem_access . (
 ) -> MemoryOpResult(bool) = {
   let aligned = [paddr with 1..0 = 0b00];
   let aligned_next = aligned + zero_extend(0x4);
+
+  __WriteRAM_Meta(paddr, width, meta);
 
   let wk = write_kind_of_flags(aq, rl, con);
 

@@ -21,7 +21,7 @@ mapping encdec_mul_op : mul_op <-> bits(3) = {
 }
 
 mapping clause encdec = MUL(rs2, rs1, rd, mul_op)                    if haveMulDiv() | haveZmmul()
-  <-> 0b0000001 @ rs2 @ rs1 @ encdec_mul_op(mul_op) @ rd @ 0b0110011 if haveMulDiv() | haveZmmul()
+  <-> 0b0000001 @ encdec_r(rs2) @ encdec_r(rs1) @ encdec_mul_op(mul_op) @ encdec_r(rd) @ 0b0110011 if haveMulDiv() | haveZmmul()
 
 function clause execute (MUL(rs2, rs1, rd, mul_op)) = {
   let rs1_val = X(rs1);
@@ -50,7 +50,7 @@ mapping clause assembly = MUL(rs2, rs1, rd, mul_op)
 union clause ast = DIV : (regidx, regidx, regidx, bool)
 
 mapping clause encdec = DIV(rs2, rs1, rd, s)                           if haveMulDiv()
-  <-> 0b0000001 @ rs2 @ rs1 @ 0b10 @ bool_not_bits(s) @ rd @ 0b0110011 if haveMulDiv()
+  <-> 0b0000001 @ encdec_r(rs2) @ encdec_r(rs1) @ 0b10 @ bool_not_bits(s) @ encdec_r(rd) @ 0b0110011 if haveMulDiv()
 
 function clause execute (DIV(rs2, rs1, rd, s)) = {
   let rs1_val = X(rs1);
@@ -76,7 +76,7 @@ mapping clause assembly = DIV(rs2, rs1, rd, s)
 union clause ast = REM : (regidx, regidx, regidx, bool)
 
 mapping clause encdec = REM(rs2, rs1, rd, s)                           if haveMulDiv()
-  <-> 0b0000001 @ rs2 @ rs1 @ 0b11 @ bool_not_bits(s) @ rd @ 0b0110011 if haveMulDiv()
+  <-> 0b0000001 @ encdec_r(rs2) @ encdec_r(rs1) @ 0b11 @ bool_not_bits(s) @ encdec_r(rd) @ 0b0110011 if haveMulDiv()
 
 function clause execute (REM(rs2, rs1, rd, s)) = {
   let rs1_val = X(rs1);

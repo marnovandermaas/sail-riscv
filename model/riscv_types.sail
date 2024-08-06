@@ -22,7 +22,7 @@ type word = bits(32)
 
 /* register identifiers */
 
-type regidx  = bits(5)
+struct regidx = { idx : bits(5) }
 type cregidx = bits(3)    /* identifiers in RVC instructions */
 type csreg   = bits(12)   /* CSR addressing */
 
@@ -35,12 +35,12 @@ function regidx_to_regno b = let 'r = unsigned(b) in r
 
 /* mapping RVC register indices into normal indices */
 val creg2reg_idx : cregidx -> regidx
-function creg2reg_idx(creg) = 0b01 @ creg
+function creg2reg_idx(creg) = struct { idx = 0b01 @ creg }
 
 /* some architecture and ABI relevant register identifiers */
-let zreg : regidx = 0b00000  /* x0, zero register  */
-let ra   : regidx = 0b00001  /* x1, return address */
-let sp   : regidx = 0b00010  /* x2, stack pointer  */
+let zreg : regidx = struct { idx = 0b00000 }  /* x0, zero register  */
+let ra   : regidx = struct { idx = 0b00001 }  /* x1, return address */
+let sp   : regidx = struct { idx = 0b00010 }  /* x2, stack pointer  */
 
 /* instruction fields */
 

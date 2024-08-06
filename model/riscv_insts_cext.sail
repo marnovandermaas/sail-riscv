@@ -83,7 +83,7 @@ mapping clause assembly = C_SW(uimm, rsc1, rsc2)
 union clause ast = C_ADDI : (bits(6), regidx)
 
 mapping clause encdec_compressed = C_ADDI(nzi5 @ nzi40, rsd)
-  <-> 0b000 @ nzi5 : bits(1) @ rsd : regidx @ nzi40 : bits(5) @ 0b01
+  <-> 0b000 @ nzi5 : bits(1) @ encdec_r(rsd) @ nzi40 : bits(5) @ 0b01
 
 function clause decompress C_ADDI(nzi, rsd) = {
   let imm : bits(12) = sign_extend(nzi);
@@ -108,7 +108,7 @@ mapping clause assembly = C_JAL(imm)
 union clause ast = C_LI : (bits(6), regidx)
 
 mapping clause encdec_compressed = C_LI(imm5 @ imm40, rd)
-  <-> 0b010 @ imm5 : bits(1) @ rd : regidx @ imm40 : bits(5) @ 0b01
+  <-> 0b010 @ imm5 : bits(1) @ encdec_r(rd) @ imm40 : bits(5) @ 0b01
 
 function clause decompress C_LI(imm, rd) = {
   let imm : bits(12) = sign_extend(imm);
@@ -141,7 +141,7 @@ union clause ast = C_LUI : (bits(6), regidx)
 
 mapping clause encdec_compressed = C_LUI(imm17 @ imm1612, rd)
       if imm17 @ imm1612 != 0b000000
-  <-> 0b011 @ imm17 : bits(1) @ rd : regidx @ imm1612 : bits(5) @ 0b01
+  <-> 0b011 @ imm17 : bits(1) @ encdec_r(rd) @ imm1612 : bits(5) @ 0b01
       if imm17 @ imm1612 != 0b000000
 
 function clause decompress C_LUI(imm, rd) = {
@@ -302,7 +302,7 @@ union clause ast = C_SLLI : (bits(6), regidx)
 
 mapping clause encdec_compressed = C_SLLI(nzui5 @ nzui40, rsd)
       if nzui5 == 0b0
-  <-> 0b000 @ nzui5 : bits(1) @ rsd : regidx @ nzui40 : bits(5) @ 0b10
+  <-> 0b000 @ nzui5 : bits(1) @ encdec_r(rsd) @ nzui40 : bits(5) @ 0b10
       if nzui5 == 0b0
 
 function clause decompress C_SLLI(shamt, rsd) = Some(SHIFTIOP(shamt, rsd, rsd, RISCV_SLLI))
@@ -317,7 +317,7 @@ union clause ast = C_LWSP : (bits(6), regidx)
 
 mapping clause encdec_compressed = C_LWSP(ui76 @ ui5 @ ui42, rd)
       if rd != zreg
-  <-> 0b010 @ ui5 : bits(1) @ rd : regidx @ ui42 : bits(3) @ ui76 : bits(2) @ 0b10
+  <-> 0b010 @ ui5 : bits(1) @ encdec_r(rd) @ ui42 : bits(3) @ ui76 : bits(2) @ 0b10
       if rd != zreg
 
 function clause decompress C_LWSP(uimm, rd) = {
@@ -334,7 +334,7 @@ mapping clause assembly = C_LWSP(uimm, rd)
 union clause ast = C_SWSP : (bits(6), regidx)
 
 mapping clause encdec_compressed = C_SWSP(ui76 @ ui52, rs2)
-  <-> 0b110 @ ui52 : bits(4) @ ui76 : bits(2) @ rs2 : regidx @ 0b10
+  <-> 0b110 @ ui52 : bits(4) @ ui76 : bits(2) @ encdec_r(rs2) @ 0b10
 
 function clause decompress C_SWSP(uimm, rs2) = {
   let imm : bits(12) = zero_extend(uimm @ 0b00);
@@ -349,7 +349,7 @@ union clause ast = C_JR : (regidx)
 
 mapping clause encdec_compressed = C_JR(rs1)
       if rs1 != zreg
-  <-> 0b100 @ 0b0 @ rs1 : regidx @ 0b00000 @ 0b10
+  <-> 0b100 @ 0b0 @ encdec_r(rs1) @ 0b00000 @ 0b10
       if rs1 != zreg
 
 function clause decompress C_JR(rs1) = Some(RISCV_JALR(zero_extend(0b0), rs1, zreg))
@@ -364,7 +364,7 @@ union clause ast = C_JALR : (regidx)
 
 mapping clause encdec_compressed = C_JALR(rs1)
       if rs1 != zreg
-  <-> 0b100 @ 0b1 @ rs1 : regidx @ 0b00000 @ 0b10
+  <-> 0b100 @ 0b1 @ encdec_r(rs1) @ 0b00000 @ 0b10
       if rs1 != zreg
 
 function clause decompress C_JALR(rs1) = Some(RISCV_JALR(zero_extend(0b0), rs1, ra))
@@ -379,7 +379,7 @@ union clause ast = C_MV : (regidx, regidx)
 
 mapping clause encdec_compressed = C_MV(rd, rs2)
       if rs2 != zreg
-  <-> 0b100 @ 0b0 @ rd : regidx @ rs2 : regidx @ 0b10
+  <-> 0b100 @ 0b0 @ encdec_r(rd) @ encdec_r(rs2) @ 0b10
       if rs2 != zreg
 
 function clause decompress C_MV(rd, rs2) = Some(RTYPE(rs2, zreg, rd, RISCV_ADD))
@@ -404,7 +404,7 @@ union clause ast = C_ADD : (regidx, regidx)
 
 mapping clause encdec_compressed = C_ADD(rsd, rs2)
       if rs2 != zreg
-  <-> 0b100 @ 0b1 @ rsd : regidx @ rs2 : regidx @ 0b10
+  <-> 0b100 @ 0b1 @ encdec_r(rsd) @ encdec_r(rs2) @ 0b10
       if rs2 != zreg
 
 function clause decompress C_ADD(rsd, rs2) = Some(RTYPE(rs2, rsd, rsd, RISCV_ADD))
