@@ -131,85 +131,16 @@ function pmpMatchEntry(addr: int, width: int, acc: AccessType(ext_access_type), 
 
 function pmpCheck forall 'n, 'n > 0. (addr: xlenbits, width: atom('n), acc: AccessType(ext_access_type), priv: Privilege)
                   -> option(ExceptionType) = {
-  let width : xlenbits = to_bits(sizeof(xlen), width);
-  let check : bool =
-  match pmpMatchEntry(addr, width, acc, priv, pmp0cfg, pmpaddr0, zeros()) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp1cfg, pmpaddr1, pmpaddr0) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp2cfg, pmpaddr2, pmpaddr1) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp3cfg, pmpaddr3, pmpaddr2) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp4cfg, pmpaddr4, pmpaddr3) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp5cfg, pmpaddr5, pmpaddr4) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp6cfg, pmpaddr6, pmpaddr5) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp7cfg, pmpaddr7, pmpaddr6) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp8cfg, pmpaddr8, pmpaddr7) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp9cfg, pmpaddr9, pmpaddr8) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp10cfg, pmpaddr10, pmpaddr9) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp11cfg, pmpaddr11, pmpaddr10) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp12cfg, pmpaddr12, pmpaddr11) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp13cfg, pmpaddr13, pmpaddr12) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp14cfg, pmpaddr14, pmpaddr13) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-  match pmpMatchEntry(addr, width, acc, priv, pmp15cfg, pmpaddr15, pmpaddr14) {
-    PMP_Success  => true,
-    PMP_Fail     => false,
-    PMP_Continue =>
-      match priv {
-        Machine =>
-          if mseccfg.MMWP() == 0b1                /* Make Read, Write and execute denied by default, if condition meets for M mode */
-          then false
-          else if mseccfg.MML() == 0b1            /* Make execute denied, if condition meets for M mode */
-          then match acc {
-                 Execute(_) => false,
-                 _          => true
-               }
-          else true,
-        _       => false                          /* Make Read, Write and execute denied by default for S/U mode */
-      }
-  }}}}}}}}}}}}}}}};
+  if sys_pmp_count() == 0 then return None();
+
+  foreach (i from 0 to 3) {
+    let prev_pmpaddr = (if i > 0 then pmpReadAddrReg(i - 1) else zeros());
+    match pmpMatchEntry(addr, width, acc, priv, pmpcfg_n[i], pmpReadAddrReg(i), prev_pmpaddr) {
+      PMP_Success  => { return None(); },
+      PMP_Fail     => { return Some(accessToFault(acc)); },
+      PMP_Continue => (),
+    }
+  };
 
   if   check
   then None()
@@ -219,6 +150,7 @@ function pmpCheck forall 'n, 'n > 0. (addr: xlenbits, width: atom('n), acc: Acce
     ReadWrite(_) => Some(E_SAMO_Access_Fault()),
     Execute()    => Some(E_Fetch_Access_Fault())
   }
+}
 
 function init_pmp() -> unit = {
   mseccfg->RLB() = 0b0;

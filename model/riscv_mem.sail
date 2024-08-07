@@ -279,6 +279,7 @@ function checked_mem_write forall 'n, 0 < 'n <= max_mem_access . (
     1 => split_bits_byte(data, paddr[1..0]),
     2 => split_bits_half(data, paddr[1..0]),
     4 => split_bits_word(data, paddr[1..0]),
+    8 => (data[31..0], 0b1111, data[63..32], 0b1111),
     _ => internal_error(__FILE__, __LINE__, "store got bad width")
   }) : (bits(32), bits(4), bits(32), bits(4));
 
