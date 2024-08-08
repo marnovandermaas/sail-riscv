@@ -516,7 +516,8 @@ mapping clause encdec = EBREAK()
   <-> 0b000000000001 @ 0b00000 @ 0b000 @ 0b00000 @ 0b1110011
 
 function clause execute EBREAK() = {
-  handle_mem_exception(0x00000000, E_Breakpoint());
+  let v = if plat_mtval_has_ebreak_pc() then PC else 0x00000000;
+  handle_mem_exception(v, E_Breakpoint());
   RETIRE_FAIL
 }
 

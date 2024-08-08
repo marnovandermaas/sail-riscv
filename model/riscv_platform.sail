@@ -28,6 +28,12 @@ val plat_mtval_has_illegal_inst_bits = {ocaml: "Platform.mtval_has_illegal_inst_
                                         c: "plat_mtval_has_illegal_inst_bits",
                                         lem: "plat_mtval_has_illegal_inst_bits"} : unit -> bool
 
+/* whether mtval stores the bits of the ebreak instruction on EBREAK */
+val plat_mtval_has_ebreak_pc = {ocaml: "Platform.plat_mtval_has_ebreak_pc",
+                                        interpreter: "Platform.plat_mtval_has_ebreak_pc",
+                                        c: "plat_mtval_has_ebreak_pc",
+                                        lem: "plat_mtval_has_ebreak_pc"} : unit -> bool
+
 /* Platform initialization and ticking. */
 
 function init_platform() -> unit = ()
