@@ -136,7 +136,7 @@ function clause execute CSR(csr, rs1, rd, is_imm, op) = {
     CSRRW  => true,
     _      => unsigned(rs1) != 0
   };
-  if isWrite & is_imm & haveE() & rs1[4] == bitone
+  if not(is_imm) & haveE() & rs1[4] == bitone
   then { handle_illegal(); RETIRE_FAIL }
   else if not(check_CSR(csr, cur_privilege, isWrite))
   then { handle_illegal(); RETIRE_FAIL }
