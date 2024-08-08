@@ -268,6 +268,12 @@ function set_mstatus_UXL(m : Mstatus, a : arch_xlen) -> Mstatus = {
   }
 }
 
+/* value to make mstatus.MPP when an illegal value is written */
+val plat_illegal_mpp_default = {ocaml: "Platform.plat_illegal_mpp_default",
+				interpreter: "Platform.plat_illegal_mpp_default",
+				c: "plat_illegal_mpp_default",
+				lem: "plat_illegal_mpp_default"} : unit -> bits(2)
+
 function legalize_mstatus(o : Mstatus, v : xlenbits) -> Mstatus = {
   /*
    * Populate all defined fields using the bits of v, stripping anything
@@ -278,7 +284,7 @@ function legalize_mstatus(o : Mstatus, v : xlenbits) -> Mstatus = {
 
   /* Legalize MPP */
   let m = [m with MPP = if have_privLevel(m[MPP]) then m[MPP]
-                        else privLevel_to_bits(lowest_supported_privLevel())];
+                        else plat_illegal_mpp_default()];
 
   /* We don't have any extension context yet. */
   let m = [m with XS = extStatus_to_bits(Off)];
@@ -444,9 +450,14 @@ bitfield Mcause : xlenbits = {
 }
 register mcause : Mcause
 
+/* value to make mstatus.MPP when an illegal value is written */
+val plat_has_internal_interrupts = {ocaml: "Platform.plat_has_internal_interrupts",
+				interpreter: "Platform.plat_has_internal_interrupts",
+				c: "plat_has_internal_interrupts",
+				lem: "plat_has_internal_interrupts"} : unit -> bool
+
 function legalize_mcause(v : xlenbits) -> Mcause = {
-  // Ibex internal interrupts
-  if v[31..30] == 0b11 then
+  if (v[31..30] == 0b11) & plat_has_internal_interrupts() then
     Mk_Mcause([v with 30..5 = sail_ones(26)])
   else
     Mk_Mcause([v with 30..5 = sail_zeros(26)])
