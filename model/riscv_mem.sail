@@ -106,13 +106,13 @@ function checked_mem_read forall 'n, 0 < 'n <= max_mem_access . (
 
   let meta = __ReadRAM_Meta(paddr, width);
 
-  let res_fst = (match pmpCheck(unsigned(aligned), 4, t, priv) {
+  let res_fst = (match pmpCheck(aligned, 4, t, priv) {
     Some(e) => MemException(paddr, e), // Use misaligned version
     None() => phys_mem_read_word_aligned(t, aligned, aq, rl, res),
   }) : MemoryOpResult(bits(32));
 
   if 4 - unsigned(paddr[1..0]) < width then {
-    let res_snd = (match pmpCheck(unsigned(aligned_next), 4, t, priv) {
+    let res_snd = (match pmpCheck(aligned_next, 4, t, priv) {
       Some(e) => MemException(aligned_next, e),
       None() => phys_mem_read_word_aligned(t, aligned_next, aq, rl, res),
     }) : MemoryOpResult(bits(32));
@@ -184,12 +184,12 @@ function mem_read_i (t, paddr, width) = {
   let aligned = [paddr with 1..0 = 0b00];
   let aligned_next = aligned + zero_extend(0x4);
 
-  match pmpCheck(unsigned(aligned), 4, t, priv) {
+  match pmpCheck(aligned, 4, t, priv) {
     Some(e) => MemException(paddr, e),
     None() =>
       if (width == 2) | (paddr[1..0] == 0b00)
       then MemValue(())
-      else match pmpCheck(unsigned(aligned_next), 4, t, priv) {
+      else match pmpCheck(aligned_next, 4, t, priv) {
         Some(e) => MemException(paddr + zero_extend(0x2), e),
         None() => MemValue(()),
       }
@@ -283,13 +283,13 @@ function checked_mem_write forall 'n, 0 < 'n <= max_mem_access . (
     _ => internal_error(__FILE__, __LINE__, "store got bad width")
   }) : (bits(32), bits(4), bits(32), bits(4));
 
-  let res_fst = (match pmpCheck(unsigned(aligned), 4, typ, priv) {
+  let res_fst = (match pmpCheck(aligned, 4, typ, priv) {
     Some(e) => MemException(paddr, e), // Use misaligned version
     None() => phys_mem_write_word_aligned(wk, aligned, fst_data, fst_be),
   }) : MemoryOpResult(bool);
 
   if 4 - unsigned(paddr[1..0]) < width then {
-    let res_snd = (match pmpCheck(unsigned(aligned_next), 4, typ, priv) {
+    let res_snd = (match pmpCheck(aligned_next, 4, typ, priv) {
       Some(e) => MemException(aligned_next, e),
       None() => phys_mem_write_word_aligned(wk, aligned_next, snd_data, snd_be),
     }) : MemoryOpResult(bool);

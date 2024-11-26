@@ -9,16 +9,16 @@
 /* address ranges */
 
 // [min, max) of the matching range, in units of 4 bytes.
-type pmp_addr_range_in_words = option((int, int))
+type pmp_addr_range_in_words = option((xlenbits, xlenbits))
 
 function pmpAddrRange(cfg: Pmpcfg_ent, pmpaddr: xlenbits, prev_pmpaddr: xlenbits) -> pmp_addr_range_in_words = {
   match pmpAddrMatchType_of_bits(cfg[A]) {
     OFF   => None(),
-    TOR   => { Some ((unsigned(prev_pmpaddr), unsigned(pmpaddr))) },
+    TOR   => { Some ((prev_pmpaddr, pmpaddr)) },
     NA4   => {
                // NA4 is not selectable when the PMP grain G >= 1. See pmpWriteCfg().
                assert(sys_pmp_grain() < 1, "NA4 cannot be selected when PMP grain G >= 1.");
-               let lo = unsigned(pmpaddr);
+               let lo = pmpaddr;
                Some((lo, lo + 1))
              },
     NAPOT => {
@@ -30,8 +30,8 @@ function pmpAddrRange(cfg: Pmpcfg_ent, pmpaddr: xlenbits, prev_pmpaddr: xlenbits
                // ~mask:           0b11111100000
                let lo   = pmpaddr & (~ (mask));
                // mask + 1:        0b00000100000
-               let len  = unsigned(mask) + 1;
-               Some((unsigned(lo), (unsigned(lo) + len)))
+               let len  = mask + 1;
+               Some((lo, (lo + len)))
              }
   }
 }
@@ -91,14 +91,16 @@ function pmpCheckPerms(ent, acc, priv) = {
 
 enum pmpAddrMatch = {PMP_NoMatch, PMP_PartialMatch, PMP_Match}
 
-function pmpMatchAddr(addr: int, width: int, rng: pmp_addr_range_in_words) -> pmpAddrMatch = {
+function pmpMatchAddr(addr: xlenbits, width: xlenbits, rng: pmp_addr_range_in_words) -> pmpAddrMatch = {
   match rng {
     None()         => PMP_NoMatch,
     Some((lo, hi)) => {
       // Convert to integers.
+      let addr  = unsigned(addr);
+      let width = unsigned(width);
       // These are in units of 4 bytes.
-      let lo = lo * 4;
-      let hi = hi * 4;
+      let lo = unsigned(lo) * 4;
+      let hi = unsigned(hi) * 4;
 
       if   hi <= lo   /* to handle mis-configuration */
       then PMP_NoMatch
@@ -115,7 +117,7 @@ function pmpMatchAddr(addr: int, width: int, rng: pmp_addr_range_in_words) -> pm
 
 enum pmpMatch = {PMP_Success, PMP_Continue, PMP_Fail}
 
-function pmpMatchEntry(addr: int, width: int, acc: AccessType(ext_access_type), priv: Privilege,
+function pmpMatchEntry(addr: xlenbits, width: xlenbits, acc: AccessType(ext_access_type), priv: Privilege,
                        ent: Pmpcfg_ent, pmpaddr: xlenbits, prev_pmpaddr: xlenbits) -> pmpMatch = {
   let rng = pmpAddrRange(ent, pmpaddr, prev_pmpaddr);
   match pmpMatchAddr(addr, width, rng) {
@@ -128,10 +130,18 @@ function pmpMatchEntry(addr: int, width: int, acc: AccessType(ext_access_type), 
 }
 
 /* priority checks */
+function accessToFault(acc : AccessType(ext_access_type)) -> ExceptionType =
+  match acc {
+    Read(_)      => E_Load_Access_Fault(),
+    Write(_)     => E_SAMO_Access_Fault(),
+    ReadWrite(_) => E_SAMO_Access_Fault(),
+    Execute()    => E_Fetch_Access_Fault(),
+  }
 
 function pmpCheck forall 'n, 'n > 0. (addr: xlenbits, width: atom('n), acc: AccessType(ext_access_type), priv: Privilege)
                   -> option(ExceptionType) = {
   if sys_pmp_count() == 0 then return None();
+  let width : xlenbits = to_bits(sizeof(xlen), width);
 
   foreach (i from 0 to 3) {
     let prev_pmpaddr = (if i > 0 then pmpReadAddrReg(i - 1) else zeros());
@@ -142,13 +152,17 @@ function pmpCheck forall 'n, 'n > 0. (addr: xlenbits, width: atom('n), acc: Acce
     }
   };
 
-  if   check
-  then None()
-  else match acc {
-    Read(_)      => Some(E_Load_Access_Fault()),
-    Write(_)     => Some(E_SAMO_Access_Fault()),
-    ReadWrite(_) => Some(E_SAMO_Access_Fault()),
-    Execute()    => Some(E_Fetch_Access_Fault())
+  match priv {
+    Machine =>
+      if mseccfg.MMWP() == 0b1 /* Make Read, Write and execute denied by default, if condition meets for M mode */
+      then Some(accessToFault(acc))
+      else if mseccfg.MML() == 0b1 /* Make execute denied, if condition meets for M mode */
+      then match acc {
+              Execute(_) => Some(accessToFault(acc)),
+              _          => None()
+            }
+      else None(),
+    _       => Some(accessToFault(acc)) /* Make Read, Write and execute denied by default for S/U mode */
   }
 }
 

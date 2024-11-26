@@ -127,21 +127,6 @@ function pmpWriteCfg(n: range(0, 63), cfg: Pmpcfg_ent, v: bits(8)) -> Pmpcfg_ent
   } else legal_v
 }
 
-    // "The R, W, and X fields form a collective WARL field for which the combinations with R=0 and W=1 are reserved."
-    // In this implementation if R=0 and W=1 then R, W and X are all set to 0.
-    // This is the least risky option from a security perspective.
-    let cfg = if cfg[W] == 0b1 & cfg[R] == 0b0 then [cfg with X = 0b0, W = 0b0, R = 0b0] else cfg;
-
-    // "When G >= 1, the NA4 mode is not selectable."
-    // In this implementation we set it to OFF if NA4 is selected.
-    // This is the least risky option from a security perspective.
-    let cfg = if sys_pmp_grain() >= 1 & pmpAddrMatchType_of_bits(cfg[A]) == NA4
-              then [cfg with A = pmpAddrMatchType_to_bits(OFF)]
-              else cfg;
-
-    cfg
-  }
-
 function pmpWriteCfgReg(n : range(0, 15), v : xlenbits) -> unit = {
   if n >= sys_pmp_count() then {
     return ();
@@ -185,10 +170,10 @@ function mseccfgWrite(reg: Mseccfg_ent, v: xlenbits) -> Mseccfg_ent = {
   let legal_v : Mseccfg_ent = Mk_Mseccfg_ent(zero_extend(v[2 .. 0]));
   let reg : Mseccfg_ent = match (reg.RLB(), legal_v.RLB()) {                   /* to set RLB, need to check PMPCFG_L */
     (0b0, 0b1) =>
-      if (pmp0cfg.L() == 0b1 | pmp1cfg.L() == 0b1 | pmp2cfg.L() == 0b1 | pmp3cfg.L() == 0b1
-         | pmp4cfg.L() == 0b1 | pmp5cfg.L() == 0b1 | pmp6cfg.L() == 0b1 | pmp7cfg.L() == 0b1
-         | pmp8cfg.L() == 0b1 | pmp9cfg.L() == 0b1 | pmp10cfg.L() == 0b1 | pmp11cfg.L() == 0b1
-         | pmp12cfg.L() == 0b1 | pmp13cfg.L() == 0b1 | pmp14cfg.L() == 0b1 | pmp15cfg.L() == 0b1)
+      if (pmpcfg_n[0].L() == 0b1 | pmpcfg_n[1].L() == 0b1 | pmpcfg_n[2].L() == 0b1 | pmpcfg_n[3].L() == 0b1
+         | pmpcfg_n[4].L() == 0b1 | pmpcfg_n[5].L() == 0b1 | pmpcfg_n[6].L() == 0b1 | pmpcfg_n[7].L() == 0b1
+         | pmpcfg_n[8].L() == 0b1 | pmpcfg_n[9].L() == 0b1 | pmpcfg_n[10].L() == 0b1 | pmpcfg_n[11].L() == 0b1
+         | pmpcfg_n[12].L() == 0b1 | pmpcfg_n[13].L() == 0b1 | pmpcfg_n[14].L() == 0b1 | pmpcfg_n[15].L() == 0b1)
       then reg
       else update_RLB(reg, legal_v.RLB()),
     (_, _)     => update_RLB(reg, legal_v.RLB())
